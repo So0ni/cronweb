@@ -19,7 +19,7 @@ class AioSubprocessWorker(worker.WorkerBase):
         )
         queue = self._core.get_log_queue(uuid)
         state_proc = worker.JobStateEnum.RUNNING
-        self._core.job_running(uuid, worker.JobState(uuid, state_proc))
+        self._core.set_job_running(uuid, worker.JobState(uuid, state_proc))
         self._running_jobs[uuid] = proc
 
         while True:
@@ -42,7 +42,7 @@ class AioSubprocessWorker(worker.WorkerBase):
                 proc.kill()
                 state_proc = worker.JobStateEnum.KILLED
                 break
-        self._core.job_done(uuid, worker.JobState(uuid, state_proc))
+        self._core.set_job_done(uuid, worker.JobState(uuid, state_proc))
         self._running_jobs.pop(uuid)
         return
 

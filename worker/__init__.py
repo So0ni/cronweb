@@ -2,6 +2,7 @@ from __future__ import annotations
 import abc
 import typing
 import enum
+import logging
 
 if typing.TYPE_CHECKING:
     import cronweb
@@ -12,6 +13,7 @@ class JobStateEnum(enum.Enum):
     DONE = 2
     ERROR = 3
     KILLED = 4
+    UNKNOWN = 5
 
 
 class JobState(typing.NamedTuple):
@@ -23,6 +25,7 @@ class WorkerBase(abc.ABC):
     def __init__(self, controller: typing.Optional[cronweb.CronWeb] = None):
         super().__init__()
         self._core: typing.Optional[cronweb.CronWeb] = controller
+        self._py_logger: logging.Logger = logging.getLogger(f'cronweb.{self.__class__.__name__}')
 
     def set_controller(self, controller: cronweb.CronWeb):
         self._core = controller

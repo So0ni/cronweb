@@ -60,6 +60,12 @@ class TriggerAioCron(trigger.TriggerBase):
         return {uuid: self._cronjob_to_jobinfo(cronjob)
                 for uuid, cronjob in self._job_dict.items()}
 
+    def stop_all(self) -> typing.Dict[str, trigger.JobInfo]:
+        for job in self._job_dict.values():
+            job.cron.stop()
+        return {uuid: self._cronjob_to_jobinfo(cronjob)
+                for uuid, cronjob in self._job_dict.items()}
+
     @staticmethod
     def _cronjob_to_jobinfo(job: CronJob) -> trigger.JobInfo:
         return trigger.JobInfo(job.cron.uuid, job.cron.spec, job.command, job.param, job.name)
