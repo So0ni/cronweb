@@ -14,12 +14,15 @@ class WebFastAPI(web.WebBase):
         self.init_api()
 
     def init_api(self):
+        self._py_logger.info('初始化fastAPI路由')
+
         @self.app.get('/')
         def index():
             return {'response': 'hello'}
         # TODO 完成API设计
 
     def on_shutdown(self, func: typing.Callable):
+        self._py_logger.info('添加fastAPI shutdown回调')
         self.app.on_event('shutdown')(func)
 
     async def start_server(self, host: str = '127.0.0.1', port: int = 8000, **kwargs):

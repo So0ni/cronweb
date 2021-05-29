@@ -21,6 +21,7 @@ class AioSqlitePool:
         self._lock = asyncio.Lock()
         self._pool_size_limit = self._pool_size + 2
         self._py_logger: logging.Logger = logging.getLogger(f'cronweb.{self.__class__.__name__}')
+        self._py_logger.debug('创建AioSqlitePool对象 初始连接池大小:%s 文件路径:%s', pool_size, db_path)
 
     @classmethod
     async def create_pool(cls, db_path: typing.Union[str, pathlib.Path],
@@ -36,31 +37,38 @@ class AioSqlitePool:
     async def get_connection(self) -> aiosqlite.Connection:
         """返回数据库连接对象 超过30秒未返回则新建连接对象"""
         try:
+            self._py_logger.debug('尝试从queue中获取连接对象')
             conn = await asyncio.wait_for(self._idle_queue.get(), timeout=30)
-        except asyncio.TimeoutError:
+        except asyncio.TimeoutError as e:
             await self._lock.acquire()
             self._py_logger.error('数据库连接池获取超时 可能存在连接泄漏')
             if self._pool_size < self._pool_size_limit:
+                self._py_logger.warning('尝试创建新数据库连接')
                 conn = await aiosqlite.connect(self._db_path)
                 await conn.execute("PRAGMA encoding='UTF-8';")
                 await conn.commit()
                 self._pool_size += 1
             else:
                 self._lock.release()
-                raise
+                self._py_logger.error('数据库连接池超硬性限制')
+                raise e
             self._lock.release()
         self._busy_set.add(conn)
         return conn
 
     async def back_connection(self, conn: aiosqlite.Connection):
+        self._py_logger.debug('尝试归还数据库连接')
         self._busy_set.remove(conn)
         if not conn._running:
+            self._py_logger.warning('数据库连接被意外关闭 尝试重新运行')
             conn.run()
         await self._idle_queue.put(conn)
 
     async def close(self):
         await self._lock.acquire()
+        self._py_logger.debug('尝试关闭连接池 当前连接池大小:%s', self._pool_size)
         for i in range(self._pool_size):
+            self._py_logger.debug('尝试关闭%s号连接', i)
             conn: aiosqlite.Connection = await self._idle_queue.get()
             await conn.close()
         self._lock.release()
@@ -94,10 +102,12 @@ class AioSqliteStorage(storage.StorageBase):
             sql = r"SELECT count(name) FROM sqlite_master WHERE type='table' AND name='{table_name}'"
             async with conn.execute(sql.format(table_name='jobs')) as cursor:
                 if (await cursor.fetchone())[0] == 0:
+                    self._py_logger.info('jobs表不存在 尝试创建')
                     await self._create_table_job()
 
             async with conn.execute(sql.format(table_name='job_logs')) as cursor:
                 if (await cursor.fetchone())[0] == 0:
+                    self._py_logger.info('job_logs表不存在 尝试创建')
                     await self._create_table_job_log()
 
     async def _create_table_job(self):
@@ -162,4 +172,5 @@ class AioSqliteStorage(storage.StorageBase):
         pass
 
     async def stop(self):
+        self._py_logger.info('尝试关闭storage')
         await self.db_pool.close()

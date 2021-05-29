@@ -22,11 +22,15 @@ class TriggerAioCron(trigger.TriggerBase):
     def add_job(self, cron_exp: str, command: str, param: str,
                 uuid: typing.Optional[str] = None, name: str = '',
                 update: bool = True) -> typing.Optional[trigger.JobInfo]:
+        self._py_logger.info('尝试新建job 任务名:%s', name)
+        self._py_logger.debug('job 周期:%s 命令:%s', cron_exp, command)
         if uuid is None:
             uuid = uuid4().hex
+            self._py_logger.debug('未指定uuid 自动生成:%s', uuid)
         elif uuid in self:
             if update is not True:
                 raise trigger.JobDuplicateError(f'job {uuid} has been exists')
+            self._py_logger.warning('任务uuid:%s 任务名:%s 已存在 尝试更新', uuid, name)
             return self.update_job(uuid, cron_exp, command, param, name)
 
         async def job_func(core_inner: cronweb.CronWeb,
@@ -44,23 +48,30 @@ class TriggerAioCron(trigger.TriggerBase):
 
     def update_job(self, uuid: str, cron_exp: str, command: str, param: str,
                    name: str = '') -> typing.Optional[trigger.JobInfo]:
+        self._py_logger.info('尝试更新trigger任务 %s', uuid)
         if uuid not in self:
+            self._py_logger.warning('uuid不存在于trigger 不可更新: %s', uuid)
             return None
         self.remove_job(uuid)
-        return self.add_job(cron_exp, command, param, uuid, name)
+        return self.add_job(cron_exp, command, param, uuid, name, update=False)
 
     def remove_job(self, uuid: str) -> typing.Optional[trigger.JobInfo]:
+        self._py_logger.info('尝试从trigger删除任务 %s', uuid)
         if uuid not in self:
+            self._py_logger.warning('uuid不存在于trigger 不可删除: %s', uuid)
             return None
         job = self._job_dict.pop(uuid)
+        self._py_logger.debug('从trigger中停止任务')
         job.cron.stop()
         return self._cronjob_to_jobinfo(job)
 
     def get_jobs(self) -> typing.Dict[str, trigger.JobInfo]:
+        self._py_logger.debug('从trigger中获取所有任务')
         return {uuid: self._cronjob_to_jobinfo(cronjob)
                 for uuid, cronjob in self._job_dict.items()}
 
     def stop_all(self) -> typing.Dict[str, trigger.JobInfo]:
+        self._py_logger.info('尝试停止trigger中所有任务')
         for job in self._job_dict.values():
             job.cron.stop()
         return {uuid: self._cronjob_to_jobinfo(cronjob)

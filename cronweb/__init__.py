@@ -46,6 +46,7 @@ class CronWeb:
 
     async def shoot(self, command: str, param: str, uuid: str, timeout: float = 1800) -> None:
         """使用worker执行job"""
+        self._py_logger.info('分发任务到worker uuid:%s', uuid)
         return await self._worker.shoot(command, param, uuid, timeout)
 
     def add_job(self, cron_exp: str, command: str, param: str,
@@ -53,6 +54,7 @@ class CronWeb:
         """添加job 添加到trigger和storage 如果不指定uuid则自动创建uuid
         成功添加返回job info 失败(uuid已存在)返回None
         """
+        self._py_logger.info('尝试添加任务')
         job = self._trigger.add_job(cron_exp, command, param, uuid, name)
         if job is not None:
             pass
@@ -64,6 +66,7 @@ class CronWeb:
         """更新指定uuid的job 这项操作并不会停止正在运行的job 但是会从trigger和storage中更新
         成功更新返回job info 失败(uuid不存在)返回None
         """
+        self._py_logger.info('尝试更新任务')
         job = self._trigger.update_job(cron_exp, command, param, uuid, name)
         if job is not None:
             pass
@@ -74,6 +77,7 @@ class CronWeb:
         """删除指定uuid的job 这项操作并不会停止正在运行的job 但是会从trigger和storage中删除
         成功删除返回job info 失败(uuid不存在)返回None
         """
+        self._py_logger.info('尝试删除任务')
         job = self._trigger.remove_job(uuid)
         if job is not None:
             pass
@@ -82,6 +86,7 @@ class CronWeb:
 
     def get_jobs(self) -> typing.Dict[str, trigger.JobInfo]:
         """获取所有job的dict 获取前会执行job检查"""
+        self._py_logger.info('尝试获取所有任务')
         # TODO 获取所有job
         self.job_check()
         return self._trigger.get_jobs()
@@ -106,11 +111,13 @@ class CronWeb:
 
     def set_job_done(self, uuid: str, state: worker.JobState):
         """将job状态设置为已结束(一般由worker设置)"""
+        self._py_logger.debug('任务执行结束 完成状态:%s uuid:%s', state.state.name, uuid)
         # TODO 任务完成时写入数据库
         pass
 
     def set_job_running(self, uuid: str, state: worker.JobState):
         """将job状态设置为运行中(一般由worker设置)"""
+        self._py_logger.debug('任务开始执行 状态:%s uuid:%s', state.state.name, uuid)
         # TODO 任务开始运行时写入数据库
         pass
 
@@ -119,10 +126,12 @@ class CronWeb:
         如果job存在于storage不在trigger 则 添加到trigger
         如果job存在于trigger不在storage 则 检查worker状态 并 添加到storage
         """
+        self._py_logger.info('尝试检查任务一致性')
         # TODO 检查job运行状态和数据库的差别
         pass
 
     async def stop(self):
+        self._py_logger.info('尝试停止各项功能 准备结束')
         self.stop_all_trigger()
         self.stop_all_running_jobs()
         self.job_check()
@@ -130,5 +139,6 @@ class CronWeb:
         # TODO 优雅结束
 
     async def run(self, host: str = '127.0.0.1', port: int = 8000, **kwargs):
+        self._py_logger.info('启动fastAPI')
         self._web.on_shutdown(self.stop)
         await self._web.start_server(host, port, **kwargs)

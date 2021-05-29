@@ -18,6 +18,7 @@ class AioLogger(logger.LoggerBase):
             self.path_log.mkdir(parents=True)
 
     def get_log_queue(self, uuid: str) -> asyncio.queues.Queue:
+        self._py_logger.debug('尝试获取执行日志通道 uuid:%s', uuid)
         queue = asyncio.Queue()
         now = datetime.datetime.now()
         file_name = f'{uuid}-{int(now.timestamp() * 1000)}'
