@@ -19,9 +19,9 @@ class AioSubprocessWorker(worker.WorkerBase):
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.STDOUT
         )
-        queue = self._core.get_log_queue(uuid)
+        queue, log_path = self._core.get_log_queue(uuid)
         state_proc = worker.JobStateEnum.RUNNING
-        self._core.set_job_running(uuid, worker.JobState(uuid, state_proc))
+        log_id = await self._core.set_job_running(uuid, log_path, worker.JobState(uuid, state_proc))
         self._running_jobs[uuid] = proc
         await queue.put(f'uuid: {uuid}\ncommand: {command}\nparam: {param}')
         while True:
@@ -48,7 +48,7 @@ class AioSubprocessWorker(worker.WorkerBase):
                 self._py_logger.error('任务killed %s', uuid)
                 state_proc = worker.JobStateEnum.KILLED
                 break
-        self._core.set_job_done(uuid, worker.JobState(uuid, state_proc))
+        await self._core.set_job_done(log_id, worker.JobState(uuid, state_proc))
         self._running_jobs.pop(uuid)
         return
 

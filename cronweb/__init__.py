@@ -6,6 +6,7 @@ import logger
 import typing
 import asyncio
 import logging
+import pathlib
 
 
 class CronWeb:
@@ -49,80 +50,79 @@ class CronWeb:
         self._py_logger.info('分发任务到worker uuid:%s', uuid)
         return await self._worker.shoot(command, param, uuid, timeout)
 
-    def add_job(self, cron_exp: str, command: str, param: str,
-                uuid: typing.Optional[str] = None, name: str = '') -> trigger.JobInfo:
+    async def add_job(self, cron_exp: str, command: str, param: str,
+                      uuid: typing.Optional[str] = None, name: str = '') -> typing.Optional[trigger.JobInfo]:
         """添加job 添加到trigger和storage 如果不指定uuid则自动创建uuid
         成功添加返回job info 失败(uuid已存在)返回None
         """
         self._py_logger.info('尝试添加任务')
         job = self._trigger.add_job(cron_exp, command, param, uuid, name)
         if job is not None:
-            pass
-        # TODO 添加写数据库等行为
+            await self._storage.save_job(job)
         return job
 
-    def update_job(self, uuid: str, cron_exp: str, command: str, param: str,
-                   name: str = '') -> typing.Optional[trigger.JobInfo]:
+    async def update_job(self, uuid: str, cron_exp: str, command: str, param: str,
+                         name: str = '') -> typing.Optional[trigger.JobInfo]:
         """更新指定uuid的job 这项操作并不会停止正在运行的job 但是会从trigger和storage中更新
         成功更新返回job info 失败(uuid不存在)返回None
         """
         self._py_logger.info('尝试更新任务')
         job = self._trigger.update_job(cron_exp, command, param, uuid, name)
         if job is not None:
-            pass
-        # TODO 添加写数据库等行为
+            await self._storage.remove_job(uuid)
+            await self._storage.save_job(job)
         return job
 
-    def remove_job(self, uuid: str) -> typing.Optional[trigger.JobInfo]:
+    async def remove_job(self, uuid: str) -> typing.Optional[trigger.JobInfo]:
         """删除指定uuid的job 这项操作并不会停止正在运行的job 但是会从trigger和storage中删除
         成功删除返回job info 失败(uuid不存在)返回None
         """
         self._py_logger.info('尝试删除任务')
         job = self._trigger.remove_job(uuid)
         if job is not None:
-            pass
-        # TODO 添加写数据库等行为
+            await self._storage.remove_job(uuid)
+
         return job
 
-    def get_jobs(self) -> typing.Dict[str, trigger.JobInfo]:
+    async def get_jobs(self) -> typing.Dict[str, trigger.JobInfo]:
         """获取所有job的dict 获取前会执行job检查"""
         self._py_logger.info('尝试获取所有任务')
-        # TODO 获取所有job
-        self.job_check()
+        await self.job_check()
         return self._trigger.get_jobs()
 
     def stop_all_trigger(self) -> typing.Dict[str, trigger.JobInfo]:
         """停止trigger中的所有任务 但是并不从中删除(暂时不考虑写入数据库 用于停止后避免启动新进程)"""
         return self._trigger.stop_all()
 
-    def get_log_queue(self, uuid: str) -> asyncio.queues.Queue:
+    def get_log_queue(self, uuid: str) -> typing.Tuple[asyncio.queues.Queue, pathlib.Path]:
         """获取对应uuid的日志queue实例 运行开始时间和结束时间由queue实例写入"""
         return self._aiolog.get_log_queue(uuid)
 
     def stop_all_running_jobs(self) -> typing.Set[str]:
         """停止worker所有运行中的job 并返回成功结束的job uuid集合"""
-        # TODO done?主进程接收到停止命令时需要
         return self._worker.kill_all_running_jobs()
 
     def get_all_running_jobs(self) -> typing.Set[str]:
         """从worker中获取正在运行中的job uuid集合"""
-        # TODO done?获取正在运行的job
         return self._worker.get_running_jobs()
 
-    def set_job_done(self, uuid: str, state: worker.JobState):
+    async def set_job_done(self, log_id: int, state: worker.JobState):
         """将job状态设置为已结束(一般由worker设置)"""
-        self._py_logger.debug('任务执行结束 完成状态:%s uuid:%s', state.state.name, uuid)
-        # TODO 任务完成时写入数据库
-        pass
+        self._py_logger.debug('任务执行结束 完成状态:%s uuid:%s', state.state.name, state.uuid)
+        if log_id is None:
+            self._py_logger.error('log id为None 可能是开始执行时数据库写入失败')
+            return
+        await self._storage.job_log_done(log_id, state)
 
-    def set_job_running(self, uuid: str, state: worker.JobState):
-        """将job状态设置为运行中(一般由worker设置)"""
+    async def set_job_running(self, uuid: str, log_path: typing.Union[str, pathlib.Path],
+                              state: worker.JobState) -> typing.Optional[int]:
+        """将job状态设置为运行中(一般由worker设置) 返回log id"""
         self._py_logger.debug('任务开始执行 状态:%s uuid:%s', state.state.name, uuid)
-        # TODO 任务开始运行时写入数据库
-        pass
+        return await self._storage.job_log_shoot(uuid, log_path, state)
 
-    def job_check(self):
+    async def job_check(self):
         """对比trigger storage worker三者的job状态，并进行修正
+        启动时会进行一次完成从storage到trigger的载入
         如果job存在于storage不在trigger 则 添加到trigger
         如果job存在于trigger不在storage 则 检查worker状态 并 添加到storage
         """
@@ -134,11 +134,11 @@ class CronWeb:
         self._py_logger.info('尝试停止各项功能 准备结束')
         self.stop_all_trigger()
         self.stop_all_running_jobs()
-        self.job_check()
+        await self.job_check()
         await self._storage.stop()
-        # TODO 优雅结束
 
     async def run(self, host: str = '127.0.0.1', port: int = 8000, **kwargs):
         self._py_logger.info('启动fastAPI')
         self._web.on_shutdown(self.stop)
+        await self.job_check()
         await self._web.start_server(host, port, **kwargs)

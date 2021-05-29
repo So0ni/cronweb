@@ -3,11 +3,21 @@ import abc
 import typing
 import pathlib
 import logging
+import datetime
 
 if typing.TYPE_CHECKING:
     import cronweb
     import trigger
     import worker
+
+
+class LogRecord(typing.NamedTuple):
+    log_id: int
+    uuid: str
+    state: str
+    log_path: str
+    date_start: str
+    date_end: typing.Optional[str] = None
 
 
 class StorageBase(abc.ABC):
@@ -30,7 +40,7 @@ class StorageBase(abc.ABC):
         pass
 
     @abc.abstractmethod
-    async def get_job(self, uuid: str) -> trigger.JobInfo:
+    async def get_job(self, uuid: str) -> typing.Optional[trigger.JobInfo]:
         """用uuid获取一个指定的job"""
         pass
 
@@ -40,29 +50,36 @@ class StorageBase(abc.ABC):
         pass
 
     @abc.abstractmethod
-    async def save_job(self, job_info: trigger.JobInfo):
+    async def save_job(self, job_info: trigger.JobInfo) -> typing.Optional[trigger.JobInfo]:
         """添加一个新job到数据库"""
         pass
 
     @abc.abstractmethod
-    async def job_log_shoot(self, uuid: str, log_path: typing.Union[str, pathlib.Path]):
+    async def remove_job(self, uuid: str) -> typing.Optional[str]:
+        """从数据库删除一个job"""
+        pass
+
+    @abc.abstractmethod
+    async def job_log_shoot(self, uuid: str, log_path: typing.Union[str, pathlib.Path],
+                            job_state: worker.JobState) -> typing.Optional[int]:
         """新建一条job log的运行记录
         uuid 日志路径 状态(运行中)
+        返回log id
         """
         pass
 
     @abc.abstractmethod
-    async def job_log_done(self, uuid: str, job_state: worker.JobState):
+    async def job_log_done(self, log_id: int, job_state: worker.JobState):
         """修改job log的运行记录 状态为实际的状态"""
         pass
 
     @abc.abstractmethod
-    async def job_log_get_by_id(self, uuid: str) -> typing.Optional[worker.JobState]:
+    async def job_logs_get_by_uuid(self, uuid: str) -> typing.List[LogRecord]:
         """通过uuid获取job log的状态"""
         pass
 
     @abc.abstractmethod
-    async def job_log_get_by_state(self, state: worker.JobStateEnum) -> typing.Set[str]:
+    async def job_logs_get_by_state(self, state: worker.JobStateEnum) -> typing.List[LogRecord]:
         """获取所有状态为指定状态的job log"""
         pass
 

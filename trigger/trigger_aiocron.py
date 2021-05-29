@@ -1,6 +1,7 @@
 import trigger
 import aiocron
 import typing
+import datetime
 from uuid import uuid4
 
 import cronweb
@@ -12,6 +13,8 @@ class CronJob(typing.NamedTuple):
     command: str
     param: str
     name: str
+    date_create: str
+    date_update: str
 
 
 class TriggerAioCron(trigger.TriggerBase):
@@ -20,6 +23,7 @@ class TriggerAioCron(trigger.TriggerBase):
         self._job_dict: typing.Dict[str, CronJob] = {}
 
     def add_job(self, cron_exp: str, command: str, param: str,
+                date_create: str, date_update: typing.Optional[str] = None,
                 uuid: typing.Optional[str] = None, name: str = '',
                 update: bool = True) -> typing.Optional[trigger.JobInfo]:
         self._py_logger.info('尝试新建job 任务名:%s', name)
@@ -31,7 +35,8 @@ class TriggerAioCron(trigger.TriggerBase):
             if update is not True:
                 raise trigger.JobDuplicateError(f'job {uuid} has been exists')
             self._py_logger.warning('任务uuid:%s 任务名:%s 已存在 尝试更新', uuid, name)
-            return self.update_job(uuid, cron_exp, command, param, name)
+            date_update = date_update or str(datetime.datetime.now())
+            return self.update_job(uuid, cron_exp, command, param, date_update, name)
 
         async def job_func(core_inner: cronweb.CronWeb,
                            command_inner: str, param_inner: str):
@@ -43,17 +48,18 @@ class TriggerAioCron(trigger.TriggerBase):
                             start=True,
                             uuid=uuid
                             )
-        self._job_dict[uuid] = CronJob(cron, command, param, name)
+        self._job_dict[uuid] = CronJob(cron, command, param, name, date_create, date_update or date_create)
         return self._cronjob_to_jobinfo(self._job_dict[uuid])
 
     def update_job(self, uuid: str, cron_exp: str, command: str, param: str,
+                   date_update: str,
                    name: str = '') -> typing.Optional[trigger.JobInfo]:
         self._py_logger.info('尝试更新trigger任务 %s', uuid)
         if uuid not in self:
             self._py_logger.warning('uuid不存在于trigger 不可更新: %s', uuid)
             return None
-        self.remove_job(uuid)
-        return self.add_job(cron_exp, command, param, uuid, name, update=False)
+        date_create = self.remove_job(uuid).date_create
+        return self.add_job(cron_exp, command, param, date_create, date_update, uuid, name, update=False)
 
     def remove_job(self, uuid: str) -> typing.Optional[trigger.JobInfo]:
         self._py_logger.info('尝试从trigger删除任务 %s', uuid)
@@ -79,7 +85,8 @@ class TriggerAioCron(trigger.TriggerBase):
 
     @staticmethod
     def _cronjob_to_jobinfo(job: CronJob) -> trigger.JobInfo:
-        return trigger.JobInfo(job.cron.uuid, job.cron.spec, job.command, job.param, job.name)
+        return trigger.JobInfo(job.cron.uuid, job.cron.spec, job.command,
+                               job.param, job.name, job.date_create, job.date_update)
 
     def __contains__(self, uuid: str) -> bool:
         return uuid in self._job_dict

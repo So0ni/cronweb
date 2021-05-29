@@ -1,8 +1,10 @@
 from __future__ import annotations
 import abc
 import asyncio
+import datetime
 import typing
 import logging
+import pathlib
 
 if typing.TYPE_CHECKING:
     import cronweb
@@ -22,5 +24,5 @@ class LoggerBase(abc.ABC):
         self._core = controller
 
     @abc.abstractmethod
-    def get_log_queue(self, uuid: str) -> asyncio.queues.Queue:
+    def get_log_queue(self, uuid: str) -> typing.Tuple[asyncio.queues.Queue, pathlib.Path]:
         pass

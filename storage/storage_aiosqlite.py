@@ -1,4 +1,5 @@
 import asyncio
+import datetime
 
 import storage
 import aiosqlite
@@ -143,33 +144,105 @@ class AioSqliteStorage(storage.StorageBase):
             await conn.execute(sql)
             await conn.commit()
 
-    async def get_job(self, uuid: str) -> trigger.JobInfo:
-        # TODO
-        pass
+    async def get_job(self, uuid: str) -> typing.Optional[trigger.JobInfo]:
+        sql = r"""SELECT * FROM jobs WHERE uuid=? AND deleted=0"""
+        async with self.db_pool.connect() as conn:
+            async with conn.execute(sql, (uuid,)) as cursor:
+                row = await cursor.fetchone()
+                if len(row) == 0:
+                    self._py_logger.warning('任务不存在于storage uuid:%s', uuid)
+                    return None
+                return trigger.JobInfo(row[0], row[1], row[2], row[3], row[4], row[5], row[6])
 
     async def get_all_jobs(self) -> typing.Dict[str, trigger.JobInfo]:
-        # TODO
-        pass
+        sql = r"""SELECT * FROM jobs WHERE deleted=0"""
+        async with self.db_pool.connect() as conn:
+            async with conn.execute(sql) as cursor:
+                rows = await cursor.fetchall()
+                if len(rows) == 0:
+                    self._py_logger.warning('storage中无任务')
+                    return {}
+                return {row[0]: trigger.JobInfo(row[0], row[1], row[2],
+                                                row[3], row[4], row[5], row[6])
+                        for row in rows}
 
-    async def save_job(self, job_info: trigger.JobInfo):
-        # TODO
-        pass
+    async def save_job(self, job_info: trigger.JobInfo) -> typing.Optional[trigger.JobInfo]:
+        sql = r"""INSERT INTO jobs [(uuid, cron_exp, command, param, name, date_create, date_update)]  
+                    VALUES (?, ?, ?, ?, ?, ?, ?);"""
+        self._py_logger.debug('尝试在storage中添加新任务 %s', job_info)
+        async with self.db_pool.connect() as conn:
+            try:
+                await conn.execute(sql, tuple(job_info))
+                await conn.commit()
+            except Exception as e:
+                self._py_logger.error('storage任务添加失败')
+                self._py_logger.exception(e)
+                return None
+        return job_info
 
-    async def job_log_shoot(self, uuid: str, log_path: typing.Union[str, pathlib.Path]):
-        # TODO
-        pass
+    async def remove_job(self, uuid: str) -> typing.Optional[str]:
+        """从数据库删除一个job"""
+        sql = r"""DELETE FROM jobs WHERE uuid=?;"""
+        self._py_logger.debug('尝试在storage中删除任务 %s', uuid)
+        async with self.db_pool.connect() as conn:
+            try:
+                await conn.execute(sql, (uuid,))
+                await conn.commit()
+            except Exception as e:
+                self._py_logger.error('storage任务删除失败')
+                self._py_logger.exception(e)
+                return None
+        return uuid
 
-    async def job_log_done(self, uuid: str, job_state: worker.JobState):
-        # TODO
-        pass
+    async def job_log_shoot(self, uuid: str, log_path: typing.Union[str, pathlib.Path],
+                            job_state: worker.JobState) -> typing.Optional[int]:
+        sql = r"""INSERT INTO job_logs (uuid, state, log_path, date_start)
+                    VALUES (?, ?, ?, ?);"""
+        self._py_logger.debug('尝试在storage中添加新任务log记录 %s', uuid)
+        async with self.db_pool.connect() as conn:
+            try:
+                log_path = pathlib.Path(log_path)
+                date_start = datetime.datetime.fromtimestamp(float(log_path.stem.split('-')[1]) / 1000)
+                await conn.execute(sql, (uuid, job_state.state.name,
+                                         str(log_path), str(date_start)))
+                await conn.commit()
+                async with conn.execute(r'select last_insert_rowid() as log_id from job_logs;') as cursor:
+                    log_id = await cursor.fetchone()[0]
+                return log_id
 
-    async def job_log_get_by_id(self, uuid: str) -> typing.Optional[worker.JobState]:
-        # TODO
-        pass
+            except Exception as e:
+                self._py_logger.error('storage任务log添加失败')
+                self._py_logger.exception(e)
+                return None
 
-    async def job_log_get_by_state(self, state: worker.JobStateEnum) -> typing.Set[str]:
-        # TODO
-        pass
+    async def job_log_done(self, log_id: int, job_state: worker.JobState):
+        sql = r"""UPDATE job_logs SET state=? WHERE id=? AND deleted=0;"""
+        self._py_logger.debug('尝试在storage中更新新任务log记录 log_id:%s', log_id)
+        async with self.db_pool.connect() as conn:
+            try:
+                await conn.execute(sql, (log_id, job_state.state.name))
+                await conn.commit()
+            except Exception as e:
+                self._py_logger.error('storage任务log更新失败')
+                self._py_logger.exception(e)
+
+    async def job_logs_get_by_uuid(self, uuid: str) -> typing.List[storage.LogRecord]:
+        sql = r"""SELECT * FROM job_logs WHERE uuid=? AND deleted=0;"""
+        self._py_logger.debug('尝试在storage中查询任务log记录 uuid:%s', uuid)
+        async with self.db_pool.connect() as conn:
+            async with conn.execute(sql, (uuid,)) as cursor:
+                rows = await cursor.fetchall()
+                out_list = [storage.LogRecord(row[0], row[1], row[2], row[3], row[4], row[5]) for row in rows]
+        return out_list
+
+    async def job_logs_get_by_state(self, state: worker.JobStateEnum) -> typing.List[storage.LogRecord]:
+        sql = r"""SELECT * FROM job_logs WHERE state=? AND deleted=0;"""
+        self._py_logger.debug('尝试在storage中查询任务log记录 state:%s', state.name)
+        async with self.db_pool.connect() as conn:
+            async with conn.execute(sql, (state.name,)) as cursor:
+                rows = await cursor.fetchall()
+                out_list = [storage.LogRecord(row[0], row[1], row[2], row[3], row[4], row[5]) for row in rows]
+        return out_list
 
     async def stop(self):
         self._py_logger.info('尝试关闭storage')

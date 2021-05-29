@@ -13,6 +13,8 @@ class JobInfo(typing.NamedTuple):
     command: str
     param: str
     name: str
+    date_create: str
+    date_update: str
 
 
 class JobDuplicateError(Exception):
@@ -30,11 +32,13 @@ class TriggerBase(abc.ABC):
 
     @abc.abstractmethod
     def add_job(self, cron_exp: str, command: str, param: str,
+                date_create: str, date_update: typing.Optional[str] = None,
                 uuid: typing.Optional[str] = None, name: str = '') -> JobInfo:
         pass
 
     @abc.abstractmethod
     def update_job(self, uuid: str, cron_exp: str, command: str, param: str,
+                   date_update: str,
                    name: str = '') -> JobInfo:
         pass
 
