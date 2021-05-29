@@ -1,38 +1,104 @@
+import asyncio
+
 import storage
 import aiosqlite
 import pathlib
 import logging
 import typing
+import contextlib
 
 import trigger
 import worker
 
 
+class AioSqlitePool:
+    def __init__(self, db_path: typing.Union[str, pathlib.Path],
+                 pool_size: int):
+        self._idle_queue: asyncio.Queue[aiosqlite.Connection] = asyncio.Queue()
+        self._busy_set: typing.Set[aiosqlite.Connection] = set()
+        self._db_path = db_path
+        self._pool_size = pool_size
+        self._lock = asyncio.Lock()
+        self._pool_size_limit = self._pool_size + 2
+        self._py_logger: logging.Logger = logging.getLogger(f'cronweb.{self.__class__.__name__}')
+
+    @classmethod
+    async def create_pool(cls, db_path: typing.Union[str, pathlib.Path],
+                          pool_size: int = 2) -> "AioSqlitePool":
+        inst = cls(db_path, pool_size)
+        for i in range(pool_size):
+            conn = await aiosqlite.connect(inst._db_path)
+            await conn.execute("PRAGMA encoding='UTF-8';")
+            await conn.commit()
+            await inst._idle_queue.put(conn)
+        return inst
+
+    async def get_connection(self) -> aiosqlite.Connection:
+        """返回数据库连接对象 超过30秒未返回则新建连接对象"""
+        try:
+            conn = await asyncio.wait_for(self._idle_queue.get(), timeout=30)
+        except asyncio.TimeoutError:
+            await self._lock.acquire()
+            self._py_logger.error('数据库连接池获取超时 可能存在连接泄漏')
+            if self._pool_size < self._pool_size_limit:
+                conn = await aiosqlite.connect(self._db_path)
+                await conn.execute("PRAGMA encoding='UTF-8';")
+                await conn.commit()
+                self._pool_size += 1
+            else:
+                self._lock.release()
+                raise
+            self._lock.release()
+        self._busy_set.add(conn)
+        return conn
+
+    async def back_connection(self, conn: aiosqlite.Connection):
+        self._busy_set.remove(conn)
+        if not conn._running:
+            conn.run()
+        await self._idle_queue.put(conn)
+
+    async def close(self):
+        await self._lock.acquire()
+        for i in range(self._pool_size):
+            conn: aiosqlite.Connection = await self._idle_queue.get()
+            await conn.close()
+        self._lock.release()
+
+    @contextlib.asynccontextmanager
+    async def connect(self) -> aiosqlite.Connection:
+        conn = await self.get_connection()
+        try:
+            yield conn
+        finally:
+            await self.back_connection(conn)
+
+
 class AioSqliteStorage(storage.StorageBase):
-    def __init__(self, db_conn: aiosqlite.Connection):
+    def __init__(self, db_pool: AioSqlitePool, db_path: typing.Union[str, pathlib.Path]):
         super().__init__()
-        self.db_conn = db_conn
+        self.db_pool = db_pool
+        self.db_path = db_path
 
     @classmethod
     async def create(cls, db_path: typing.Union[str, pathlib.Path]):
-        db_conn = await aiosqlite.connect(db_path)
-        self = cls(db_conn)
+        pool = await AioSqlitePool.create_pool(db_path)
+        self = cls(pool, db_path)
         await self.init_db()
         return self
 
     async def init_db(self):
         """设置编码为utf8 表不存在则建表"""
-        await self.db_conn.execute("PRAGMA encoding='UTF-8';")
-        await self.db_conn.commit()
+        async with self.db_pool.connect() as conn:
 
-        sql = r"SELECT count(name) FROM sqlite_master WHERE type='table' AND name='{table_name}'"
-        async with self.db_conn.execute(sql.format(table_name='jobs')) as cursor:
-            if (await cursor.fetchone())[0] == 0:
-                await self._create_table_job()
+            sql = r"SELECT count(name) FROM sqlite_master WHERE type='table' AND name='{table_name}'"
+            async with conn.execute(sql.format(table_name='jobs')) as cursor:
+                if (await cursor.fetchone())[0] == 0:
+                    await self._create_table_job()
 
-        async with self.db_conn.execute(sql.format(table_name='job_logs')) as cursor:
-            if (await cursor.fetchone())[0] == 0:
-                await self._create_table_job_log()
+            async with conn.execute(sql.format(table_name='job_logs')) as cursor:
+                if (await cursor.fetchone())[0] == 0:
+                    await self._create_table_job_log()
 
     async def _create_table_job(self):
         sql = """
@@ -47,8 +113,9 @@ class AioSqliteStorage(storage.StorageBase):
                 deleted INTEGER DEFAULT 0
             );
         """
-        await self.db_conn.execute(sql)
-        await self.db_conn.commit()
+        async with self.db_pool.connect() as conn:
+            await conn.execute(sql)
+            await conn.commit()
 
     async def _create_table_job_log(self):
         sql = """
@@ -62,9 +129,9 @@ class AioSqliteStorage(storage.StorageBase):
                 deleted INTEGER DEFAULT 0
             );
         """
-        await self.db_conn.execute(sql)
-        print('create2')
-        await self.db_conn.commit()
+        async with self.db_pool.connect() as conn:
+            await conn.execute(sql)
+            await conn.commit()
 
     async def get_job(self, uuid: str) -> trigger.JobInfo:
         # TODO
@@ -95,4 +162,4 @@ class AioSqliteStorage(storage.StorageBase):
         pass
 
     async def stop(self):
-        await self.db_conn.close()
+        await self.db_pool.close()
