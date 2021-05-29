@@ -24,5 +24,5 @@ class LoggerBase(abc.ABC):
         self._core = controller
 
     @abc.abstractmethod
-    def get_log_queue(self, uuid: str) -> typing.Tuple[asyncio.queues.Queue, pathlib.Path]:
+    def get_log_queue(self, uuid: str, shot_id: str) -> typing.Tuple[asyncio.queues.Queue, pathlib.Path]:
         pass

@@ -17,11 +17,11 @@ class AioLogger(logger.LoggerBase):
         if not self.path_log.exists():
             self.path_log.mkdir(parents=True)
 
-    def get_log_queue(self, uuid: str) -> typing.Tuple[asyncio.queues.Queue, pathlib.Path]:
+    def get_log_queue(self, uuid: str, shot_id: str) -> typing.Tuple[asyncio.queues.Queue, pathlib.Path]:
         self._py_logger.debug('尝试获取执行日志通道 uuid:%s', uuid)
         queue = asyncio.Queue()
         now = datetime.datetime.now()
-        file_name = f'{uuid}-{int(now.timestamp() * 1000)}.log'
+        file_name = f'{int(now.timestamp() * 1000)}-{shot_id}.log'
         path_log_file = self.path_log / file_name
         task = asyncio.create_task(self._log_recording(queue, path_log_file, now))
         task.add_done_callback(functools.partial(self._log_recording_cb, self.task_dict, file_name))

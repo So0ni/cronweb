@@ -12,7 +12,7 @@ if typing.TYPE_CHECKING:
 
 
 class LogRecord(typing.NamedTuple):
-    log_id: int
+    shot_id: str
     uuid: str
     state: str
     log_path: str
@@ -60,8 +60,8 @@ class StorageBase(abc.ABC):
         pass
 
     @abc.abstractmethod
-    async def job_log_shoot(self, uuid: str, log_path: typing.Union[str, pathlib.Path],
-                            job_state: worker.JobState) -> typing.Optional[int]:
+    async def job_log_shoot(self, log_path: typing.Union[str, pathlib.Path],
+                            shot_state: worker.JobState):
         """新建一条job log的运行记录
         uuid 日志路径 状态(运行中)
         返回log id
@@ -69,7 +69,7 @@ class StorageBase(abc.ABC):
         pass
 
     @abc.abstractmethod
-    async def job_log_done(self, log_id: int, job_state: worker.JobState):
+    async def job_log_done(self, shot_state: worker.JobState):
         """修改job log的运行记录 状态为实际的状态"""
         pass
 

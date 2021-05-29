@@ -131,7 +131,7 @@ class AioSqliteStorage(storage.StorageBase):
     async def _create_table_job_log(self):
         sql = """
             CREATE TABLE job_logs(
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                shot_id NCHAR(32) PRIMARY KEY NOT NULL,
                 uuid NCHAR(32) NOT NULL,
                 state NCHAR(8) NOT NULL,
                 log_path NVARCHAR NOT NULL,
@@ -194,33 +194,31 @@ class AioSqliteStorage(storage.StorageBase):
                 return None
         return uuid
 
-    async def job_log_shoot(self, uuid: str, log_path: typing.Union[str, pathlib.Path],
-                            job_state: worker.JobState) -> typing.Optional[int]:
-        sql = r"""INSERT INTO job_logs (uuid, state, log_path, date_start)
-                    VALUES (?, ?, ?, ?);"""
+    async def job_log_shoot(self, log_path: typing.Union[str, pathlib.Path],
+                            shot_state: worker.JobState):
+        sql = r"""INSERT INTO job_logs (shot_id, uuid, state, log_path, date_start)
+                    VALUES (?, ?, ?, ?, ?);"""
+        uuid = shot_state.uuid
+        shot_id = shot_state.shot_id
         self._py_logger.debug('尝试在storage中添加新任务log记录 %s', uuid)
         async with self.db_pool.connect() as conn:
             try:
                 log_path = pathlib.Path(log_path)
-                date_start = datetime.datetime.fromtimestamp(float(log_path.stem.split('-')[1]) / 1000)
-                await conn.execute(sql, (uuid, job_state.state.name,
+                date_start = datetime.datetime.fromtimestamp(float(log_path.stem.split('-')[0]) / 1000)
+                await conn.execute(sql, (shot_id, uuid, shot_state.state.name,
                                          str(log_path), str(date_start)))
                 await conn.commit()
-                async with conn.execute(r'select last_insert_rowid() as log_id from job_logs;') as cursor:
-                    log_id = await cursor.fetchone()[0]
-                return log_id
 
             except Exception as e:
                 self._py_logger.error('storage任务log添加失败')
                 self._py_logger.exception(e)
-                return None
 
-    async def job_log_done(self, log_id: int, job_state: worker.JobState):
-        sql = r"""UPDATE job_logs SET state=? WHERE id=? AND deleted=0;"""
-        self._py_logger.debug('尝试在storage中更新新任务log记录 log_id:%s', log_id)
+    async def job_log_done(self, shot_state: worker.JobState):
+        sql = r"""UPDATE job_logs SET state=? WHERE shot_id=? AND deleted=0;"""
+        self._py_logger.debug('尝试在storage中更新新任务log记录 shot_id:%s', shot_state.shot_id)
         async with self.db_pool.connect() as conn:
             try:
-                await conn.execute(sql, (log_id, job_state.state.name))
+                await conn.execute(sql, (shot_state.shot_id, shot_state.state.name))
                 await conn.commit()
             except Exception as e:
                 self._py_logger.error('storage任务log更新失败')

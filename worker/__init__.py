@@ -19,6 +19,7 @@ class JobStateEnum(enum.Enum):
 class JobState(typing.NamedTuple):
     uuid: str
     state: JobStateEnum
+    shot_id: str
 
 
 class WorkerBase(abc.ABC):
@@ -35,9 +36,9 @@ class WorkerBase(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def get_running_jobs(self) -> typing.Set[str]:
+    def get_running_jobs(self) -> typing.Dict[str, str]:
         pass
 
     @abc.abstractmethod
-    def kill_all_running_jobs(self) -> typing.Set[str]:
+    def kill_all_running_jobs(self) -> typing.Dict[str, str]:
         pass

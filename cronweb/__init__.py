@@ -94,31 +94,27 @@ class CronWeb:
         """停止trigger中的所有任务 但是并不从中删除(暂时不考虑写入数据库 用于停止后避免启动新进程)"""
         return self._trigger.stop_all()
 
-    def get_log_queue(self, uuid: str) -> typing.Tuple[asyncio.queues.Queue, pathlib.Path]:
+    def get_log_queue(self, uuid: str, shot_id: str) -> typing.Tuple[asyncio.queues.Queue, pathlib.Path]:
         """获取对应uuid的日志queue实例 运行开始时间和结束时间由queue实例写入"""
-        return self._aiolog.get_log_queue(uuid)
+        return self._aiolog.get_log_queue(uuid, shot_id)
 
-    def stop_all_running_jobs(self) -> typing.Set[str]:
-        """停止worker所有运行中的job 并返回成功结束的job uuid集合"""
+    def stop_all_running_jobs(self) -> typing.Dict[str, str]:
+        """停止worker所有运行中的job 并返回成功结束的job {shot_id: uuid}"""
         return self._worker.kill_all_running_jobs()
 
-    def get_all_running_jobs(self) -> typing.Set[str]:
-        """从worker中获取正在运行中的job uuid集合"""
+    def get_all_running_jobs(self) -> typing.Dict[str, str]:
+        """从worker中获取正在运行中的job {shot_id: uuid}"""
         return self._worker.get_running_jobs()
 
-    async def set_job_done(self, log_id: int, state: worker.JobState):
+    async def set_job_done(self, shot_state: worker.JobState):
         """将job状态设置为已结束(一般由worker设置)"""
-        self._py_logger.debug('任务执行结束 完成状态:%s uuid:%s', state.state.name, state.uuid)
-        if log_id is None:
-            self._py_logger.error('log id为None 可能是开始执行时数据库写入失败')
-            return
-        await self._storage.job_log_done(log_id, state)
+        self._py_logger.debug('任务执行结束 完成状态:%s uuid:%s', shot_state.state.name, shot_state.uuid)
+        await self._storage.job_log_done(shot_state)
 
-    async def set_job_running(self, uuid: str, log_path: typing.Union[str, pathlib.Path],
-                              state: worker.JobState) -> typing.Optional[int]:
+    async def set_job_running(self,log_path: typing.Union[str, pathlib.Path],shot_state: worker.JobState):
         """将job状态设置为运行中(一般由worker设置) 返回log id"""
-        self._py_logger.debug('任务开始执行 状态:%s uuid:%s', state.state.name, uuid)
-        return await self._storage.job_log_shoot(uuid, log_path, state)
+        self._py_logger.debug('任务开始执行 状态:%s uuid:%s', shot_state.state.name, shot_state.uuid)
+        await self._storage.job_log_shoot(log_path, shot_state)
 
     async def job_check(self):
         """对比trigger storage worker三者的job状态，并进行修正
