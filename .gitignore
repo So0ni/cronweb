@@ -499,3 +499,4 @@ cython_debug/
 
 logs/
 logs.sqlite3
+.idea/

@@ -13,7 +13,8 @@ class AioSubprocessWorker(worker.WorkerBase):
 
     async def shoot(self, command: str, param: str, uuid: str, timeout: float) -> None:
         proc = await asyncio.create_subprocess_shell(
-            command,
+            # 只有当param存在时传入param参数(用于传递特殊参数 约定后可以是json)
+            f'{command} --param {param}' if param else command,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.STDOUT
         )

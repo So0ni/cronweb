@@ -19,6 +19,11 @@ class StorageBase(abc.ABC):
     def set_controller(self, controller: cronweb.CronWeb):
         self._core = controller
 
+    @classmethod
+    @abc.abstractmethod
+    async def create(cls, *args, **kwargs):
+        pass
+
     @abc.abstractmethod
     async def init_db(self):
         """初始化数据库表等操作"""

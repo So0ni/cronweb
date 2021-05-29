@@ -21,6 +21,7 @@ class AioSqliteStorage(storage.StorageBase):
         return self
 
     async def init_db(self):
+        """设置编码为utf8 表不存在则建表"""
         await self.db_conn.execute("PRAGMA encoding='UTF-8';")
         await self.db_conn.commit()
 
