@@ -9,24 +9,33 @@ import cronweb
 
 
 class AioLogger(logger.LoggerBase):
-    def __init__(self, path_log: typing.Union[str, pathlib.Path],
+    def __init__(self, log_dir: typing.Union[str, pathlib.Path],
                  controller: typing.Optional[cronweb.CronWeb] = None):
         super().__init__(controller)
-        self.path_log = pathlib.Path(path_log)
+        self.log_dir = pathlib.Path(log_dir)
         self.task_dict: typing.Dict[str, asyncio.Task] = {}
-        if not self.path_log.exists():
-            self.path_log.mkdir(parents=True)
+        if not self.log_dir.exists():
+            self.log_dir.mkdir(parents=True)
 
     def get_log_queue(self, uuid: str, shot_id: str) -> typing.Tuple[asyncio.queues.Queue, pathlib.Path]:
         self._py_logger.debug('尝试获取执行日志通道 uuid:%s', uuid)
         queue = asyncio.Queue()
         now = datetime.datetime.now()
         file_name = f'{int(now.timestamp() * 1000)}-{shot_id}.log'
-        path_log_file = self.path_log / file_name
+        path_log_file = self.log_dir / file_name
         task = asyncio.create_task(self._log_recording(queue, path_log_file, now))
         task.add_done_callback(functools.partial(self._log_recording_cb, self.task_dict, file_name))
         self.task_dict[file_name] = task
         return queue, path_log_file
+
+    async def read_log_by_path(self, log_path: typing.Union[str, pathlib.Path],
+                               limit_line: int = 1000) -> typing.Optional[str]:
+        # TODO 完成日志文件读取
+        pass
+
+    async def remove_log_file(self, log_path: typing.Union[str, pathlib.Path]) -> typing.Optional[pathlib.Path]:
+        # TODO 删除log文件
+        pass
 
     @staticmethod
     def _log_recording_cb(task_dict: typing.Dict[str, asyncio.Task], file_name: str,

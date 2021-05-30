@@ -26,3 +26,12 @@ class LoggerBase(abc.ABC):
     @abc.abstractmethod
     def get_log_queue(self, uuid: str, shot_id: str) -> typing.Tuple[asyncio.queues.Queue, pathlib.Path]:
         pass
+
+    @abc.abstractmethod
+    async def read_log_by_path(self, log_path: typing.Union[str, pathlib.Path],
+                               limit_line: int = 1000) -> typing.Optional[str]:
+        pass
+
+    @abc.abstractmethod
+    async def remove_log_file(self, log_path: typing.Union[str, pathlib.Path]) -> typing.Optional[pathlib.Path]:
+        pass

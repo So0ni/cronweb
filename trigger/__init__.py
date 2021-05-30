@@ -2,6 +2,7 @@ from __future__ import annotations
 import abc
 import typing
 import logging
+import croniter
 
 if typing.TYPE_CHECKING:
     import cronweb
@@ -52,6 +53,11 @@ class TriggerBase(abc.ABC):
 
     @abc.abstractmethod
     def stop_all(self) -> typing.Dict[str, JobInfo]:
+        pass
+
+    @staticmethod
+    @abc.abstractmethod
+    def cron_is_valid(cron_exp: str) -> bool:
         pass
 
     @abc.abstractmethod

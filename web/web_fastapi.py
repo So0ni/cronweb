@@ -32,10 +32,12 @@ class WebFastAPI(web.WebBase):
         # TODO 完成API设计
 
         @self.app.post('/job')
-        async def add_job(cron_exp: str, command: str, param: str, name: str):
+        async def add_job(cron_exp: str, command: str, name: str, param: str = ''):
+            if not self._core.cron_is_valid(cron_exp):
+                return {'response': 'cron表达式无效', 'code': 2}
             job = await self._core.add_job(cron_exp, command, param, name=name)
             if not job:
-                return {'response': 'failed', 'code': 0}
+                return {'response': 'failed', 'code': 1}
             return {'response': 'success', 'code': 0}
 
         @self.app.delete('/job/{uuid}')
@@ -56,8 +58,25 @@ class WebFastAPI(web.WebBase):
 
         @self.app.get('/running_jobs')
         async def get_all_running_jobs():
-            jobs_uuid = self._core.get_all_running_jobs()
-            return {'response': list(jobs_uuid), 'code': 0}
+            job_shots = self._core.get_all_running_jobs()
+            return {'response': job_shots, 'code': 0}
+
+        # @self.app.delete('/running_jobs/{shot_id}')
+        # async def stop_running_by_shot_id(shot_id: str):
+        #     result = self._core.stop_running_by_shot_id(shot_id)
+        #     if not result:
+        #         return {'response': '此shot_id未在运行', 'code': 2}
+        #     return {'response': '成功', 'code': 0}
+
+        @self.app.get('/job/{uuid}/logs')
+        async def get_logs_record_by_uuid(uuid: str):
+            records = await self._core.job_logs_get_by_uuid(uuid)
+            return {'response': records, 'code': 0}
+
+        @self.app.get('/log/{shot_id}', response_class=fastapi.responses.PlainTextResponse)
+        async def get_log_by_shot_id(shot_id: str):
+            log_record = await self._core.job_log_get_by_shot_id(shot_id)
+            return log_record
 
     def on_shutdown(self, func: typing.Callable):
         self._py_logger.info('添加fastAPI shutdown回调')

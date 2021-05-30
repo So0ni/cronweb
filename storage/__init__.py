@@ -74,6 +74,11 @@ class StorageBase(abc.ABC):
         pass
 
     @abc.abstractmethod
+    async def job_log_get_record(self, shot_id: str) -> typing.Optional[LogRecord]:
+        """通过shot_id获取日志文件的数据库记录"""
+        pass
+
+    @abc.abstractmethod
     async def job_logs_get_by_uuid(self, uuid: str) -> typing.List[LogRecord]:
         """通过uuid获取job log的状态"""
         pass
@@ -81,6 +86,21 @@ class StorageBase(abc.ABC):
     @abc.abstractmethod
     async def job_logs_get_by_state(self, state: worker.JobStateEnum) -> typing.List[LogRecord]:
         """获取所有状态为指定状态的job log"""
+        pass
+
+    @abc.abstractmethod
+    async def job_logs_remove_shot_id(self, shot_id: typing.Union[str, typing.List[str]]) -> typing.List[str]:
+        """根据shot_id从storage中删除记录"""
+        pass
+
+    @abc.abstractmethod
+    async def job_logs_set_deleted(self, uuid: str) -> typing.List[str]:
+        """删除job时 将对应uuid的job log设置为deleted(并非真实删除) 返回成功设置的shot_id"""
+        pass
+
+    @abc.abstractmethod
+    async def job_logs_get_deleted(self) -> typing.List[LogRecord]:
+        """获取所有设置为deleted的shot_id 用于进一步清理"""
         pass
 
     @abc.abstractmethod

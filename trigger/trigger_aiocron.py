@@ -2,8 +2,9 @@ import trigger
 import aiocron
 import typing
 import datetime
+import asyncio
 from uuid import uuid4
-
+import croniter
 import cronweb
 
 
@@ -38,9 +39,9 @@ class TriggerAioCron(trigger.TriggerBase):
             date_update = date_update or str(datetime.datetime.now())
             return self.update_job(uuid, cron_exp, command, param, date_update, name)
 
-        async def job_func(core_inner: cronweb.CronWeb,
-                           command_inner: str, param_inner: str):
-            await core_inner.shoot(command_inner, param_inner, uuid)
+        def job_func(core_inner: cronweb.CronWeb,
+                     command_inner: str, param_inner: str):
+            return asyncio.ensure_future(core_inner.shoot(command_inner, param_inner, uuid))
 
         cron = aiocron.Cron(spec=cron_exp,
                             func=job_func,
@@ -82,6 +83,10 @@ class TriggerAioCron(trigger.TriggerBase):
             job.cron.stop()
         return {uuid: self._cronjob_to_jobinfo(cronjob)
                 for uuid, cronjob in self._job_dict.items()}
+
+    @staticmethod
+    def cron_is_valid(cron_exp: str) -> bool:
+        return croniter.croniter.is_valid(cron_exp)
 
     @staticmethod
     def _cronjob_to_jobinfo(job: CronJob) -> trigger.JobInfo:
