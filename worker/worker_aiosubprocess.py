@@ -3,6 +3,7 @@ import typing
 import worker
 import cronweb
 import logger
+import locale
 import asyncio.subprocess
 from uuid import uuid4
 
@@ -26,6 +27,7 @@ class AioSubprocessWorker(worker.WorkerBase):
         await self._core.set_job_running(log_path, worker.JobState(uuid, state_proc, shot_id))
         self._running_jobs[shot_id] = (uuid, proc)
         await queue.put(f'shot_id:{shot_id}\nuuid: {uuid}\ncommand: {command}\nparam: {param}')
+        default_encoding = locale.getpreferredencoding()
         while True:
             try:
                 line = await asyncio.wait_for(proc.stdout.readline(), timeout)
@@ -41,13 +43,13 @@ class AioSubprocessWorker(worker.WorkerBase):
                         state_proc = worker.JobStateEnum.ERROR
                         self._py_logger.debug('任务失败 ExitCode:%s shot_id:%s', exit_code, shot_id)
                     break
-                await queue.put(line)
+                await queue.put(line.decode(default_encoding))
             except asyncio.TimeoutError:
                 self._py_logger.error('等待stdout %ss超时 shot_id:%s', timeout, shot_id)
                 await queue.put(f'Killed Timeout {timeout}s')
                 await queue.put(logger.LogStop)
                 proc.kill()
-                self._py_logger.error('任务killed %s', uuid)
+                self._py_logger.error('任务超时 killed shot_id:%s', shot_id)
                 state_proc = worker.JobStateEnum.KILLED
                 break
         await self._core.set_job_done(worker.JobState(uuid, state_proc, shot_id))
@@ -71,4 +73,12 @@ class AioSubprocessWorker(worker.WorkerBase):
                 pass
         return success_dict
 
+    def kill_by_shot_id(self, shot_id: str) -> typing.Optional[str]:
+        self._py_logger.info('尝试停止worker中正在运行任务 shot_id:%s', shot_id)
+        if shot_id not in self:
+            return None
+        self._running_jobs[shot_id][1].kill()
+        return shot_id
 
+    def __contains__(self, shot_id: str) -> bool:
+        return shot_id in self._running_jobs

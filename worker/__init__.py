@@ -42,3 +42,11 @@ class WorkerBase(abc.ABC):
     @abc.abstractmethod
     def kill_all_running_jobs(self) -> typing.Dict[str, str]:
         pass
+
+    @abc.abstractmethod
+    def kill_by_shot_id(self, shot_id: str) -> typing.Optional[str]:
+        pass
+
+    @abc.abstractmethod
+    def __contains__(self, shot_id: str) -> bool:
+        pass
