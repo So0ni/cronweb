@@ -1,4 +1,5 @@
 import asyncio
+import datetime
 import typing
 import worker
 import cronweb
@@ -11,7 +12,7 @@ from uuid import uuid4
 class AioSubprocessWorker(worker.WorkerBase):
     def __init__(self, controller: typing.Optional[cronweb.CronWeb] = None):
         super().__init__(controller)
-        self._running_jobs: typing.Dict[str, typing.Tuple[str, asyncio.subprocess.Process]] = {}
+        self._running_jobs: typing.Dict[str, typing.Tuple[str, asyncio.subprocess.Process, worker.JobState]] = {}
 
     async def shoot(self, command: str, param: str, uuid: str, timeout: float) -> None:
         shot_id = uuid4().hex
@@ -22,19 +23,22 @@ class AioSubprocessWorker(worker.WorkerBase):
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.STDOUT
         )
+        now = datetime.datetime.now()
         queue, log_path = self._core.get_log_queue(uuid, shot_id)
         state_proc = worker.JobStateEnum.RUNNING
-        await self._core.set_job_running(log_path, worker.JobState(uuid, state_proc, shot_id))
-        self._running_jobs[shot_id] = (uuid, proc)
-        await queue.put(f'shot_id:{shot_id}\nuuid: {uuid}\ncommand: {command}\nparam: {param}\n####OUTPUT####\n')
+        job_state = worker.JobState(uuid, state_proc, shot_id, str(now))
+        await self._core.set_job_running(log_path, job_state)
+        self._running_jobs[shot_id] = (uuid, proc, job_state)
+        await queue.put(f'shot_id:{shot_id}\nuuid: {uuid}\n'
+                        f'command: {command}\nparam: {param}\n####OUTPUT####\n')
         default_encoding = locale.getpreferredencoding()
         while True:
             try:
                 line = await asyncio.wait_for(proc.stdout.readline(), timeout)
                 if not line:
-                    # TODO test?进程运行结束时自动关闭管道并发送EOF？如果不是wait会导致可能的死锁
+                    # test?进程运行结束时自动关闭管道并发送EOF？如果不是wait会导致可能的死锁
                     exit_code = await proc.wait()
-                    await queue.put(f'\n####OUTPUT END####\nExit Code {exit_code}')
+                    await queue.put(f'\n####OUTPUT END####\nExit Code: {exit_code}')
                     await queue.put(logger.LogStop)
                     if exit_code == 0:
                         state_proc = worker.JobStateEnum.DONE
@@ -52,18 +56,20 @@ class AioSubprocessWorker(worker.WorkerBase):
                 self._py_logger.error('任务超时 killed shot_id:%s', shot_id)
                 state_proc = worker.JobStateEnum.KILLED
                 break
-        await self._core.set_job_done(worker.JobState(uuid, state_proc, shot_id))
+        end = datetime.datetime.now()
+        await self._core.set_job_done(worker.JobState(uuid, state_proc, shot_id, str(now), str(end)))
         self._running_jobs.pop(shot_id)
         return
 
-    def get_running_jobs(self) -> typing.Dict[str, str]:
-        """返回worker中正在运行任务的所有{shot_id: uuid}"""
+    def get_running_jobs(self) -> typing.Dict[str, typing.Tuple[str, str]]:
+        """返回worker中正在运行任务的所有{shot_id: (uuid, date_start)}"""
         self._py_logger.debug('获取worker中所有运行中任务')
-        return {shot_id: value[0] for shot_id, value in self._running_jobs.items()}
+        return {shot_id: (value[0], value[2].date_start)
+                for shot_id, value in self._running_jobs.items()}
 
     def kill_all_running_jobs(self) -> typing.Dict[str, str]:
         """关闭所有正在运行的任务 返回关闭成功的"""
-        self._py_logger.info('尝试停止worker中所有正在运行任务')
+        self._py_logger.info('停止worker中所有正在运行任务')
         success_dict = {}
         for key, job in self._running_jobs.items():
             try:
@@ -74,7 +80,7 @@ class AioSubprocessWorker(worker.WorkerBase):
         return success_dict
 
     def kill_by_shot_id(self, shot_id: str) -> typing.Optional[str]:
-        self._py_logger.info('尝试停止worker中正在运行任务 shot_id:%s', shot_id)
+        self._py_logger.info('停止worker中正在运行任务 shot_id:%s', shot_id)
         if shot_id not in self:
             return None
         self._running_jobs[shot_id][1].kill()

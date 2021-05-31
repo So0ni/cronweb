@@ -27,7 +27,7 @@ class TriggerAioCron(trigger.TriggerBase):
                 date_create: str, date_update: typing.Optional[str] = None,
                 uuid: typing.Optional[str] = None, name: str = '',
                 update: bool = True) -> typing.Optional[trigger.JobInfo]:
-        self._py_logger.info('尝试新建job 任务名:%s', name)
+        self._py_logger.info('新建trigger job 任务名:%s', name)
         self._py_logger.debug('job 周期:%s 命令:%s', cron_exp, command)
         if uuid is None:
             uuid = uuid4().hex
@@ -55,7 +55,7 @@ class TriggerAioCron(trigger.TriggerBase):
     def update_job(self, uuid: str, cron_exp: str, command: str, param: str,
                    date_update: str,
                    name: str = '') -> typing.Optional[trigger.JobInfo]:
-        self._py_logger.info('尝试更新trigger任务 %s', uuid)
+        self._py_logger.info('更新trigger任务 %s', uuid)
         if uuid not in self:
             self._py_logger.warning('uuid不存在于trigger 不可更新: %s', uuid)
             return None
@@ -63,7 +63,7 @@ class TriggerAioCron(trigger.TriggerBase):
         return self.add_job(cron_exp, command, param, date_create, date_update, uuid, name, update=False)
 
     def remove_job(self, uuid: str) -> typing.Optional[trigger.JobInfo]:
-        self._py_logger.info('尝试从trigger删除任务 %s', uuid)
+        self._py_logger.info('从trigger删除任务 %s', uuid)
         if uuid not in self:
             self._py_logger.warning('uuid不存在于trigger 不可删除: %s', uuid)
             return None
@@ -78,7 +78,7 @@ class TriggerAioCron(trigger.TriggerBase):
                 for uuid, cronjob in self._job_dict.items()}
 
     def stop_all(self) -> typing.Dict[str, trigger.JobInfo]:
-        self._py_logger.info('尝试停止trigger中所有任务')
+        self._py_logger.info('停止trigger中所有任务')
         for job in self._job_dict.values():
             job.cron.stop()
         return {uuid: self._cronjob_to_jobinfo(cronjob)

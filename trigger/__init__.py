@@ -2,7 +2,6 @@ from __future__ import annotations
 import abc
 import typing
 import logging
-import croniter
 
 if typing.TYPE_CHECKING:
     import cronweb

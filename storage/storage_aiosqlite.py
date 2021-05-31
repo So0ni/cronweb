@@ -38,13 +38,13 @@ class AioSqlitePool:
     async def get_connection(self) -> aiosqlite.Connection:
         """返回数据库连接对象 超过30秒未返回则新建连接对象"""
         try:
-            self._py_logger.debug('尝试从queue中获取连接对象')
+            self._py_logger.debug('从queue中获取连接对象')
             conn = await asyncio.wait_for(self._idle_queue.get(), timeout=30)
         except asyncio.TimeoutError as e:
             await self._lock.acquire()
             self._py_logger.error('数据库连接池获取超时 可能存在连接泄漏')
             if self._pool_size < self._pool_size_limit:
-                self._py_logger.warning('尝试创建新数据库连接')
+                self._py_logger.warning('创建新数据库连接')
                 conn = await aiosqlite.connect(self._db_path)
                 await conn.execute("PRAGMA encoding='UTF-8';")
                 await conn.commit()
@@ -58,7 +58,7 @@ class AioSqlitePool:
         return conn
 
     async def back_connection(self, conn: aiosqlite.Connection):
-        self._py_logger.debug('尝试归还数据库连接')
+        self._py_logger.debug('归还数据库连接')
         self._busy_set.remove(conn)
         if not conn._running:
             self._py_logger.warning('数据库连接被意外关闭 尝试重新运行')
@@ -67,9 +67,9 @@ class AioSqlitePool:
 
     async def close(self):
         await self._lock.acquire()
-        self._py_logger.debug('尝试关闭连接池 当前连接池大小:%s', self._pool_size)
+        self._py_logger.debug('关闭连接池 当前连接池大小:%s', self._pool_size)
         for i in range(self._pool_size):
-            self._py_logger.debug('尝试关闭%s号连接', i)
+            self._py_logger.debug('关闭%s号连接', i)
             conn: aiosqlite.Connection = await self._idle_queue.get()
             await conn.close()
         self._lock.release()
@@ -169,7 +169,7 @@ class AioSqliteStorage(storage.StorageBase):
     async def save_job(self, job_info: trigger.JobInfo) -> typing.Optional[trigger.JobInfo]:
         sql = r"""INSERT INTO jobs (uuid, cron_exp, command, param, name, date_create, date_update)
                     VALUES (?, ?, ?, ?, ?, ?, ?);"""
-        self._py_logger.debug('尝试在storage中添加新任务 %s', job_info)
+        self._py_logger.debug('在storage中添加新任务 %s', job_info)
         async with self.db_pool.connect() as conn:
             try:
                 await conn.execute(sql, tuple(job_info))
@@ -183,7 +183,7 @@ class AioSqliteStorage(storage.StorageBase):
     async def remove_job(self, uuid: str) -> typing.Optional[str]:
         """从数据库删除一个job"""
         sql = r"""DELETE FROM jobs WHERE uuid=?;"""
-        self._py_logger.debug('尝试在storage中删除任务 %s', uuid)
+        self._py_logger.debug('在storage中删除任务 %s', uuid)
         async with self.db_pool.connect() as conn:
             try:
                 await conn.execute(sql, (uuid,))
@@ -200,13 +200,12 @@ class AioSqliteStorage(storage.StorageBase):
                     VALUES (?, ?, ?, ?, ?);"""
         uuid = shot_state.uuid
         shot_id = shot_state.shot_id
-        self._py_logger.debug('尝试在storage中添加新任务log记录 %s', uuid)
+        self._py_logger.debug('在storage中添加新任务log记录 %s', uuid)
         async with self.db_pool.connect() as conn:
             try:
                 log_path = pathlib.Path(log_path)
-                date_start = datetime.datetime.fromtimestamp(float(log_path.stem.split('-')[0]) / 1000)
                 await conn.execute(sql, (shot_id, uuid, shot_state.state.name,
-                                         str(log_path), str(date_start)))
+                                         str(log_path), shot_state.date_start))
                 await conn.commit()
 
             except Exception as e:
@@ -215,11 +214,10 @@ class AioSqliteStorage(storage.StorageBase):
 
     async def job_log_done(self, shot_state: worker.JobState):
         sql = r"""UPDATE job_logs SET state=?, date_end=? WHERE shot_id=?;"""
-        self._py_logger.debug('尝试在storage中更新新任务log记录 shot_id:%s', shot_state.shot_id)
-        now = datetime.datetime.now()
+        self._py_logger.debug('在storage中更新新任务log记录 shot_id:%s', shot_state.shot_id)
         async with self.db_pool.connect() as conn:
             try:
-                await conn.execute(sql, (shot_state.state.name, str(now), shot_state.shot_id))
+                await conn.execute(sql, (shot_state.state.name, shot_state.date_end, shot_state.shot_id))
                 await conn.commit()
             except Exception as e:
                 self._py_logger.error('storage任务log更新失败')
@@ -227,12 +225,19 @@ class AioSqliteStorage(storage.StorageBase):
 
     async def job_log_get_record(self, shot_id: str) -> typing.Optional[storage.LogRecord]:
         """通过shot_id获取日志文件的数据库记录"""
-        # TODO 通过shot_id获取日志文件的数据库记录
-        pass
+        sql = r"""SELECT * FROM job_logs WHERE shot_id=? AND deleted=0;"""
+        self._py_logger.debug('在storage中查询任务log记录 shot_id:%s', shot_id)
+        async with self.db_pool.connect() as conn:
+            async with conn.execute(sql, (shot_id,)) as cursor:
+                row = await cursor.fetchone()
+                if not row:
+                    return None
+                record = storage.LogRecord(row[0], row[1], row[2], row[3], row[4], row[5])
+                return record
 
     async def job_logs_get_by_uuid(self, uuid: str) -> typing.List[storage.LogRecord]:
         sql = r"""SELECT * FROM job_logs WHERE uuid=? AND deleted=0;"""
-        self._py_logger.debug('尝试在storage中查询任务log记录 uuid:%s', uuid)
+        self._py_logger.debug('在storage中查询任务log记录 uuid:%s', uuid)
         async with self.db_pool.connect() as conn:
             async with conn.execute(sql, (uuid,)) as cursor:
                 rows = await cursor.fetchall()
@@ -241,7 +246,7 @@ class AioSqliteStorage(storage.StorageBase):
 
     async def job_logs_get_by_state(self, state: worker.JobStateEnum) -> typing.List[storage.LogRecord]:
         sql = r"""SELECT * FROM job_logs WHERE state=? AND deleted=0;"""
-        self._py_logger.debug('尝试在storage中查询任务log记录 state:%s', state.name)
+        self._py_logger.debug('在storage中查询任务log记录 state:%s', state.name)
         async with self.db_pool.connect() as conn:
             async with conn.execute(sql, (state.name,)) as cursor:
                 rows = await cursor.fetchall()
@@ -250,19 +255,45 @@ class AioSqliteStorage(storage.StorageBase):
 
     async def job_logs_remove_shot_id(self, shot_id: typing.Union[str, typing.List[str]]) -> typing.List[str]:
         """根据shot_id从storage中删除记录"""
-        # TODO 根据shot_id从storage中删除记录
-        pass
+        sql = r"""DELETE FROM job_logs WHERE shot_id=?;"""
+        if not isinstance(shot_id, list):
+            shot_id = [shot_id]
+        async with self.db_pool.connect() as conn:
+            for shot in shot_id:
+                await conn.execute(sql, (shot,))
+            await conn.commit()
+        return shot_id
 
-    async def job_logs_set_deleted(self, uuid: str) -> typing.List[str]:
+    async def job_logs_set_deleted(self, uuid: str) -> int:
         """删除job时 将对应uuid的job log设置为deleted(并非真实删除)"""
-        # TODO 删除job时 将对应uuid的job log设置为deleted
-        pass
+        sql = r"""UPDATE job_logs SET deleted=1 WHERE uuid=?;"""
+        self._py_logger.debug('在storage中job log设置为deleted uuid:%s', uuid)
+        async with self.db_pool.connect() as conn:
+            await conn.execute(sql, (uuid,))
+            await conn.commit()
+            self._py_logger.info('有%s条日志记录被标记为已删除', conn.total_changes)
+            return conn.total_changes
 
     async def job_logs_get_deleted(self) -> typing.List[storage.LogRecord]:
         """获取所有设置为deleted的shot_id 用于进一步清理"""
-        # TODO 获取所有设置为deleted的shot_id 用于进一步清理
-        pass
+        sql = r"""SELECT * FROM job_logs WHERE deleted=1;"""
+        self._py_logger.debug('在storage中查询已删除任务log记录')
+        async with self.db_pool.connect() as conn:
+            async with conn.execute(sql) as cursor:
+                rows = await cursor.fetchall()
+                out_list = [storage.LogRecord(row[0], row[1], row[2], row[3], row[4], row[5]) for row in rows]
+        return out_list
+
+    async def job_logs_get_all(self) -> typing.List[storage.LogRecord]:
+        """获取所有shot_id 包括deleted"""
+        sql = r"""SELECT * FROM job_logs;"""
+        self._py_logger.debug('在storage中查询所有任务log记录')
+        async with self.db_pool.connect() as conn:
+            async with conn.execute(sql) as cursor:
+                rows = await cursor.fetchall()
+                out_list = [storage.LogRecord(row[0], row[1], row[2], row[3], row[4], row[5]) for row in rows]
+        return out_list
 
     async def stop(self):
-        self._py_logger.info('尝试关闭storage连接池')
+        self._py_logger.info('关闭storage连接池')
         await self.db_pool.close()

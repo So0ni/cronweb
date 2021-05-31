@@ -1,7 +1,6 @@
 from __future__ import annotations
 import abc
 import asyncio
-import datetime
 import typing
 import logging
 import pathlib
@@ -33,5 +32,10 @@ class LoggerBase(abc.ABC):
         pass
 
     @abc.abstractmethod
-    async def remove_log_file(self, log_path: typing.Union[str, pathlib.Path]) -> typing.Optional[pathlib.Path]:
+    def remove_log_file(self, log_path: typing.Union[str, pathlib.Path]) -> typing.Optional[pathlib.Path]:
+        pass
+
+    @abc.abstractmethod
+    def get_all_log_file_path(self) -> typing.List[pathlib.Path]:
+        """获取所有日志文件的Path对象列表"""
         pass

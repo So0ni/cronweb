@@ -20,6 +20,8 @@ class JobState(typing.NamedTuple):
     uuid: str
     state: JobStateEnum
     shot_id: str
+    date_start: str
+    date_end: str = ''
 
 
 class WorkerBase(abc.ABC):
@@ -36,7 +38,7 @@ class WorkerBase(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def get_running_jobs(self) -> typing.Dict[str, str]:
+    def get_running_jobs(self) -> typing.Dict[str, typing.Tuple[str, str]]:
         pass
 
     @abc.abstractmethod

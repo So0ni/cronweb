@@ -1,3 +1,4 @@
+import os
 import functools
 import typing
 import pathlib
@@ -18,7 +19,7 @@ class AioLogger(logger.LoggerBase):
             self.log_dir.mkdir(parents=True)
 
     def get_log_queue(self, uuid: str, shot_id: str) -> typing.Tuple[asyncio.queues.Queue, pathlib.Path]:
-        self._py_logger.debug('尝试获取执行日志通道 uuid:%s', uuid)
+        self._py_logger.debug('获取执行日志通道 uuid:%s', uuid)
         queue = asyncio.Queue()
         now = datetime.datetime.now()
         file_name = f'{int(now.timestamp() * 1000)}-{shot_id}.log'
@@ -30,12 +31,31 @@ class AioLogger(logger.LoggerBase):
 
     async def read_log_by_path(self, log_path: typing.Union[str, pathlib.Path],
                                limit_line: int = 1000) -> typing.Optional[str]:
-        # TODO 完成日志文件读取
-        pass
+        """根据path读取文件"""
+        log_path = pathlib.Path(log_path)
+        if not log_path.exists() or log_path.is_dir():
+            self._py_logger.error('log文件不存在 %s', log_path)
+            return None
+        self._py_logger.debug('打开log文件 %s', log_path)
+        async with aiofile.async_open(str(log_path), 'r', encoding='utf8 ') as afp:
+            # aiofile的readline对utf8字符有兼容性问题
+            raw: str = await afp.read()
+            lines = raw.splitlines(keepends=True)
+            if len(lines) > limit_line:
+                lines = lines[:limit_line]
+        return ''.join(lines)
 
-    async def remove_log_file(self, log_path: typing.Union[str, pathlib.Path]) -> typing.Optional[pathlib.Path]:
-        # TODO 删除log文件
-        pass
+    def remove_log_file(self, log_path: typing.Union[str, pathlib.Path]) -> typing.Optional[pathlib.Path]:
+        """根据path删除文件"""
+        log_path = pathlib.Path(log_path)
+        if not log_path.exists() or log_path.is_dir():
+            return None
+        os.remove(log_path)
+        return log_path
+
+    def get_all_log_file_path(self) -> typing.List[pathlib.Path]:
+        """获取所有日志文件的Path对象列表"""
+        return list(self.log_dir.glob('*.log'))
 
     @staticmethod
     def _log_recording_cb(task_dict: typing.Dict[str, asyncio.Task], file_name: str,

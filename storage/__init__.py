@@ -3,7 +3,6 @@ import abc
 import typing
 import pathlib
 import logging
-import datetime
 
 if typing.TYPE_CHECKING:
     import cronweb
@@ -94,13 +93,18 @@ class StorageBase(abc.ABC):
         pass
 
     @abc.abstractmethod
-    async def job_logs_set_deleted(self, uuid: str) -> typing.List[str]:
-        """删除job时 将对应uuid的job log设置为deleted(并非真实删除) 返回成功设置的shot_id"""
+    async def job_logs_set_deleted(self, uuid: str) -> int:
+        """删除job时 将对应uuid的job log设置为deleted(并非真实删除) 返回受影响的数据条数"""
         pass
 
     @abc.abstractmethod
     async def job_logs_get_deleted(self) -> typing.List[LogRecord]:
         """获取所有设置为deleted的shot_id 用于进一步清理"""
+        pass
+
+    @abc.abstractmethod
+    async def job_logs_get_all(self) -> typing.List[LogRecord]:
+        """获取所有shot_id 包括deleted"""
         pass
 
     @abc.abstractmethod
