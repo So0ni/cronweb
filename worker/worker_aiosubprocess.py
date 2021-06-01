@@ -64,8 +64,10 @@ class AioSubprocessWorker(worker.WorkerBase):
     def get_running_jobs(self) -> typing.Dict[str, typing.Tuple[str, str]]:
         """返回worker中正在运行任务的所有{shot_id: (uuid, date_start)}"""
         self._py_logger.debug('获取worker中所有运行中任务')
-        return {shot_id: (value[0], value[2].date_start)
-                for shot_id, value in self._running_jobs.items()}
+        running = {shot_id: (value[0], value[2].date_start)
+                   for shot_id, value in self._running_jobs.items()}
+        self._py_logger.info('%s个正在运行的任务', len(running))
+        return running
 
     def kill_all_running_jobs(self) -> typing.Dict[str, str]:
         """关闭所有正在运行的任务 返回关闭成功的"""
@@ -77,6 +79,7 @@ class AioSubprocessWorker(worker.WorkerBase):
                 success_dict[key] = job[0]
             except Exception:
                 pass
+        self._py_logger.info('已停止%s个正在运行的任务', len(success_dict))
         return success_dict
 
     def kill_by_shot_id(self, shot_id: str) -> typing.Optional[str]:

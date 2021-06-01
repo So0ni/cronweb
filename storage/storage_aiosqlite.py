@@ -251,6 +251,7 @@ class AioSqliteStorage(storage.StorageBase):
             async with conn.execute(sql, (state.name,)) as cursor:
                 rows = await cursor.fetchall()
                 out_list = [storage.LogRecord(row[0], row[1], row[2], row[3], row[4], row[5]) for row in rows]
+        self._py_logger.debug('storage中有%s条未标记为deleted的log记录', len(out_list))
         return out_list
 
     async def job_logs_remove_shot_id(self, shot_id: typing.Union[str, typing.List[str]]) -> typing.List[str]:
@@ -282,6 +283,7 @@ class AioSqliteStorage(storage.StorageBase):
             async with conn.execute(sql) as cursor:
                 rows = await cursor.fetchall()
                 out_list = [storage.LogRecord(row[0], row[1], row[2], row[3], row[4], row[5]) for row in rows]
+        self._py_logger.debug('storage中有%s条被标记为deleted的log记录', len(out_list))
         return out_list
 
     async def job_logs_get_all(self) -> typing.List[storage.LogRecord]:
@@ -292,6 +294,7 @@ class AioSqliteStorage(storage.StorageBase):
             async with conn.execute(sql) as cursor:
                 rows = await cursor.fetchall()
                 out_list = [storage.LogRecord(row[0], row[1], row[2], row[3], row[4], row[5]) for row in rows]
+        self._py_logger.debug('storage中共有%s条log记录', len(out_list))
         return out_list
 
     async def stop(self):

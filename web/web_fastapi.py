@@ -1,6 +1,7 @@
 import web
 import uvicorn
 import fastapi
+import fastapi.security
 import pydantic
 import cronweb
 import typing
@@ -8,24 +9,57 @@ import typing
 
 class WebFastAPI(web.WebBase):
     def __init__(self, controller: typing.Optional[cronweb.CronWeb] = None,
+                 secret: typing.Optional[str] = None,
                  fa_kwargs: typing.Optional[typing.Dict[str, typing.Any]] = None):
         super().__init__(controller)
         fa_kwargs = fa_kwargs if fa_kwargs else {}
+        self.secret = secret
         self.app = fastapi.FastAPI(**fa_kwargs)
         self.init_api()
 
     def init_api(self):
         self._py_logger.info('初始化fastAPI路由')
+        security = fastapi.security.HTTPBearer(auto_error=False)
+
+        class AuthException(Exception):
+            def __init__(self, code: int, response: typing.Any):
+                self.code = code
+                self.response = response
+
+        @self.app.exception_handler(AuthException)
+        async def unicorn_exception_handler(request: fastapi.Request,
+                                            exc: AuthException):
+            return fastapi.responses.JSONResponse(
+                status_code=200,
+                content={'code': exc.code, 'response': exc.response},
+            )
+
+        def check_auth(credentials: fastapi.security.HTTPAuthorizationCredentials = fastapi.Security(security)):
+            if self.secret is None:
+                return
+
+            if credentials and credentials.scheme.lower() != "bearer":
+                raise fastapi.HTTPException(
+                    status_code=fastapi.status.HTTP_403_FORBIDDEN,
+                    detail="无效认证信息",
+                )
+            if not (credentials and credentials.scheme and credentials.credentials):
+                raise AuthException(code=-1, response='未授权，请登录')
+
+            if credentials.credentials != self.secret:
+                raise AuthException(code=-2, response='认证信息错误')
+            return
 
         # @self.app.get('/')
         # async def index():
         #     return {'response': 'hello'}
 
         @self.app.get('/code')
-        async def code_exp():
+        async def code_explanation():
             return {
                 '0': '成功',
                 '-1': '未授权，请登录',
+                '-2': '认证信息错误',
                 '1': '执行失败，查看后台日志',
                 '2': '执行失败，查看response'
             }
@@ -36,7 +70,7 @@ class WebFastAPI(web.WebBase):
             name: str
             param: str = ''
 
-        @self.app.post('/job')
+        @self.app.post('/job', dependencies=[fastapi.Depends(check_auth)])
         async def add_job(job_info: JobInfo):
             if not self._core.cron_is_valid(job_info.cron_exp):
                 return {'response': 'cron表达式无效', 'code': 2}
@@ -46,14 +80,14 @@ class WebFastAPI(web.WebBase):
                 return {'response': 'failed', 'code': 1}
             return {'response': 'success', 'code': 0}
 
-        @self.app.delete('/job/{uuid}')
+        @self.app.delete('/job/{uuid}', dependencies=[fastapi.Depends(check_auth)])
         async def remove_job(uuid: str):
             job = await self._core.remove_job(uuid)
             if not job:
                 return {'response': 'uuid不存在', 'code': 2}
             return {'response': '删除成功', 'code': 0}
 
-        @self.app.get('/jobs')
+        @self.app.get('/jobs', dependencies=[fastapi.Depends(check_auth)])
         async def get_all_jobs():
             """
             {
@@ -78,7 +112,7 @@ class WebFastAPI(web.WebBase):
                 self._py_logger.exception(e)
                 return {'response': str(e), 'code': 2}
 
-        @self.app.get('/running_jobs')
+        @self.app.get('/running_jobs', dependencies=[fastapi.Depends(check_auth)])
         async def get_all_running_jobs():
             """
             {
@@ -96,14 +130,14 @@ class WebFastAPI(web.WebBase):
             return {'response': [{'shot_id': shot_id, 'uuid': uuid, 'date_start': date_start}
                                  for shot_id, (uuid, date_start) in job_shots.items()], 'code': 0}
 
-        # @self.app.delete('/running_jobs/{shot_id}')
+        # @self.app.delete('/running_jobs/{shot_id}', dependencies=[fastapi.Depends(check_auth)])
         # async def stop_running_by_shot_id(shot_id: str):
         #     result = self._core.stop_running_by_shot_id(shot_id)
         #     if not result:
         #         return {'response': '此shot_id未在运行', 'code': 2}
         #     return {'response': '成功', 'code': 0}
 
-        @self.app.get('/job/{uuid}/logs')
+        @self.app.get('/job/{uuid}/logs', dependencies=[fastapi.Depends(check_auth)])
         async def get_logs_record_by_uuid(uuid: str):
             """
             {
@@ -123,7 +157,9 @@ class WebFastAPI(web.WebBase):
             records = await self._core.job_logs_get_by_uuid(uuid)
             return {'response': [rec._asdict() for rec in records], 'code': 0}
 
-        @self.app.get('/log/{shot_id}', response_class=fastapi.responses.PlainTextResponse)
+        @self.app.get('/log/{shot_id}',
+                      dependencies=[fastapi.Depends(check_auth)],
+                      response_class=fastapi.responses.PlainTextResponse)
         async def get_log_by_shot_id(shot_id: str):
             log_record = await self._core.job_log_get_by_shot_id(shot_id)
             if not log_record:
