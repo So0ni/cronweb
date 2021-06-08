@@ -50,11 +50,20 @@ class WebFastAPI(web.WebBase):
                 raise AuthException(code=-2, response='认证信息错误')
             return
 
-        # @self.app.get('/')
-        # async def index():
-        #     return {'response': 'hello'}
+        @self.app.get('/api/sys/connection')
+        async def connection_check():
+            return {'code': 0, 'response': 'hello'}
 
-        @self.app.get('/code')
+        @self.app.get('/api/sys/secret')
+        async def secret_check(secret: str):
+            if self.secret is None and len(secret) != 0:
+                return {'code': -1, 'response': '错误的认证信息'}
+            if self.secret is not None and self.secret != secret:
+                return {'code': -1, 'response': '错误的认证信息'}
+
+            return {'code': 0, 'response': 'hello'}
+
+        @self.app.get('/api/sys/code')
         async def code_explanation():
             return {
                 '0': '成功',
@@ -70,7 +79,7 @@ class WebFastAPI(web.WebBase):
             name: str
             param: str = ''
 
-        @self.app.post('/job', dependencies=[fastapi.Depends(check_auth)])
+        @self.app.post('/api/job', dependencies=[fastapi.Depends(check_auth)])
         async def add_job(job_info: JobInfo):
             if not self._core.cron_is_valid(job_info.cron_exp):
                 return {'response': 'cron表达式无效', 'code': 2}
@@ -80,14 +89,14 @@ class WebFastAPI(web.WebBase):
                 return {'response': 'failed', 'code': 1}
             return {'response': 'success', 'code': 0}
 
-        @self.app.delete('/job/{uuid}', dependencies=[fastapi.Depends(check_auth)])
+        @self.app.delete('/api/job/{uuid}', dependencies=[fastapi.Depends(check_auth)])
         async def remove_job(uuid: str):
             job = await self._core.remove_job(uuid)
             if not job:
                 return {'response': 'uuid不存在', 'code': 2}
             return {'response': '删除成功', 'code': 0}
 
-        @self.app.get('/jobs', dependencies=[fastapi.Depends(check_auth)])
+        @self.app.get('/api/jobs', dependencies=[fastapi.Depends(check_auth)])
         async def get_all_jobs():
             """
             {
@@ -112,7 +121,7 @@ class WebFastAPI(web.WebBase):
                 self._py_logger.exception(e)
                 return {'response': str(e), 'code': 2}
 
-        @self.app.get('/running_jobs', dependencies=[fastapi.Depends(check_auth)])
+        @self.app.get('/api/running_jobs', dependencies=[fastapi.Depends(check_auth)])
         async def get_all_running_jobs():
             """
             {
@@ -130,14 +139,34 @@ class WebFastAPI(web.WebBase):
             return {'response': [{'shot_id': shot_id, 'uuid': uuid, 'date_start': date_start}
                                  for shot_id, (uuid, date_start) in job_shots.items()], 'code': 0}
 
-        # @self.app.delete('/running_jobs/{shot_id}', dependencies=[fastapi.Depends(check_auth)])
+        # @self.app.delete('/api/running_jobs/{shot_id}', dependencies=[fastapi.Depends(check_auth)])
         # async def stop_running_by_shot_id(shot_id: str):
         #     result = self._core.stop_running_by_shot_id(shot_id)
         #     if not result:
         #         return {'response': '此shot_id未在运行', 'code': 2}
         #     return {'response': '成功', 'code': 0}
 
-        @self.app.get('/job/{uuid}/logs', dependencies=[fastapi.Depends(check_auth)])
+        @self.app.get('/api/logs', dependencies=[fastapi.Depends(check_auth)])
+        async def get_logs_records_undeleted(limit: int = 50):
+            """
+            {
+            "response": [
+                {
+                  "shot_id": "676389e11bf04195a8c4ac3537b640ac",
+                  "uuid": "ee5141b095d0426dbd3b375aa00de533",
+                  "state": "DONE",
+                  "log_path": "logs\\1622479620020-676389e11bf04195a8c4ac3537b640ac.log",
+                  "date_start": "2021-06-01 00:47:00.020000",
+                  "date_end": "2021-06-01 00:47:30.067080"
+                }
+              ],
+              "code": 0
+            }
+            """
+            records = await self._core.job_logs_get_undeleted(limit)
+            return {'response': [rec._asdict() for rec in records], 'code': 0}
+
+        @self.app.get('/api/job/{uuid}/logs', dependencies=[fastapi.Depends(check_auth)])
         async def get_logs_record_by_uuid(uuid: str):
             """
             {
@@ -157,7 +186,7 @@ class WebFastAPI(web.WebBase):
             records = await self._core.job_logs_get_by_uuid(uuid)
             return {'response': [rec._asdict() for rec in records], 'code': 0}
 
-        @self.app.get('/log/{shot_id}',
+        @self.app.get('/api/log/{shot_id}',
                       dependencies=[fastapi.Depends(check_auth)],
                       response_class=fastapi.responses.PlainTextResponse)
         async def get_log_by_shot_id(shot_id: str):

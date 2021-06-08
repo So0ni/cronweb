@@ -286,6 +286,21 @@ class AioSqliteStorage(storage.StorageBase):
         self._py_logger.debug('storage中有%s条被标记为deleted的log记录', len(out_list))
         return out_list
 
+    async def job_logs_get_undeleted(self, limit: int) -> typing.List[storage.LogRecord]:
+        """获取所有没有设置为deleted的shot_id 用于api"""
+        if limit <= 0:
+            sql = r"SELECT * FROM job_logs WHERE deleted=0 ORDER BY datetime(date_start) DESC ;"
+        else:
+            sql = r"SELECT * FROM job_logs WHERE deleted=0 ORDER BY datetime(date_start) DESC " \
+                  "LIMIT {limit};".format(limit=limit)
+        self._py_logger.debug('在storage中查询未标记删除任务log记录 limit:%s', limit)
+        async with self.db_pool.connect() as conn:
+            async with conn.execute(sql) as cursor:
+                rows = await cursor.fetchall()
+                out_list = [storage.LogRecord(row[0], row[1], row[2], row[3], row[4], row[5]) for row in rows]
+        self._py_logger.debug('storage中有%s条未标记删除的log记录', len(out_list))
+        return out_list
+
     async def job_logs_get_all(self) -> typing.List[storage.LogRecord]:
         """获取所有shot_id 包括deleted"""
         sql = r"""SELECT * FROM job_logs;"""

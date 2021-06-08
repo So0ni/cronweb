@@ -103,6 +103,11 @@ class StorageBase(abc.ABC):
         pass
 
     @abc.abstractmethod
+    async def job_logs_get_undeleted(self, limit: int) -> typing.List[LogRecord]:
+        """获取所有没有设置为deleted的shot_id 用于api"""
+        pass
+
+    @abc.abstractmethod
     async def job_logs_get_all(self) -> typing.List[LogRecord]:
         """获取所有shot_id 包括deleted"""
         pass

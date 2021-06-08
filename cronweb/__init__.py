@@ -117,6 +117,10 @@ class CronWeb:
         """通过shot_id结束正在运行的进程 返回shot_id None则为shot_id未运行"""
         return self._worker.kill_by_shot_id(shot_id)
 
+    async def job_logs_get_undeleted(self, limit: int) -> typing.List[storage.LogRecord]:
+        """取出所有在storage中未标记未删除的运行记录"""
+        return await self._storage.job_logs_get_undeleted(limit)
+
     async def job_logs_get_by_uuid(self, uuid: str) -> typing.List[storage.LogRecord]:
         """通过uuid在storage中取出运行记录"""
         return await self._storage.job_logs_get_by_uuid(uuid)
