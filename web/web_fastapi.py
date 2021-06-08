@@ -2,6 +2,7 @@ import web
 import uvicorn
 import fastapi
 import fastapi.security
+import fastapi.middleware.cors
 import pydantic
 import cronweb
 import typing
@@ -16,6 +17,14 @@ class WebFastAPI(web.WebBase):
         self.secret = secret
         self.app = fastapi.FastAPI(**fa_kwargs)
         self.init_api()
+
+        self.app.add_middleware(
+            fastapi.middleware.cors.CORSMiddleware,
+            allow_origins=['*'],
+            allow_credentials=True,
+            allow_methods=["*"],
+            allow_headers=["*"],
+        )
 
     def init_api(self):
         self._py_logger.info('初始化fastAPI路由')
