@@ -220,11 +220,22 @@ class CronWeb:
         """检查数据库日志和日志文件一致性，并进行修正
         数据库有日志记录 日志文件不存在时 删除日志记录
         日志文件存在 数据库日志记录不存在时 不做操作
+        日志记录中uuid不存在于job_list时 删除日志
         """
         self._py_logger.info('检查日志一致性')
+        log_all = await self._storage.job_logs_get_all()
+        log_uuid_set = {record.uuid for record in log_all}
+        job_all = await self.get_jobs()
+        job_uuid_set = set(job_all.keys())
+        invalid_uuid = log_uuid_set - job_uuid_set
+        shot_id_deleted = [record.shot_id for record in log_all if record.uuid in invalid_uuid]
+        self._py_logger.debug('清理%s条uuid无效的日志', len(shot_id_deleted))
+        await self._storage.job_logs_remove_shot_id(shot_id_deleted)
+
         self._py_logger.info('清理日志数据库')
         log_deleted = await self._storage.job_logs_get_deleted()
         shot_id_deleted = [record.shot_id for record in log_deleted]
+        self._py_logger.debug('清理%s条被标记为已删除的日志', len(shot_id_deleted))
         await self._storage.job_logs_remove_shot_id(shot_id_deleted)
 
         self._py_logger.info('清理日志文件')

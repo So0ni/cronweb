@@ -2,6 +2,7 @@ import web
 import uvicorn
 import fastapi
 import fastapi.security
+import fastapi.staticfiles
 import fastapi.middleware.cors
 import pydantic
 import cronweb
@@ -216,6 +217,8 @@ class WebFastAPI(web.WebBase):
             if not log_record:
                 return '日志不存在'
             return log_record
+
+        self.app.mount("/", fastapi.staticfiles.StaticFiles(directory="static", html=True), name="site")
 
     def on_shutdown(self, func: typing.Callable):
         self._py_logger.info('添加fastAPI shutdown回调')
