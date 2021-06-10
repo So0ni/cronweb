@@ -29,7 +29,7 @@ class AioSubprocessWorker(worker.WorkerBase):
         job_state = worker.JobState(uuid, state_proc, shot_id, str(now))
         await self._core.set_job_running(log_path, job_state)
         self._running_jobs[shot_id] = (uuid, proc, job_state)
-        await queue.put(f'shot_id:{shot_id}\nuuid: {uuid}\n'
+        await queue.put(f'shot_id: {shot_id}\nuuid: {uuid}\n'
                         f'command: {command}\nparam: {param}\n\n####OUTPUT####\n')
         default_encoding = locale.getpreferredencoding()
         while True:

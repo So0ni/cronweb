@@ -59,6 +59,11 @@ class StorageBase(abc.ABC):
         pass
 
     @abc.abstractmethod
+    async def update_job_state(self, uuid: str, active: int) -> None:
+        """更新任务状态 active=1为已激活（默认） active=0为已停止"""
+        pass
+
+    @abc.abstractmethod
     async def job_log_shoot(self, log_path: typing.Union[str, pathlib.Path],
                             shot_state: worker.JobState):
         """新建一条job log的运行记录

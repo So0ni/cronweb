@@ -16,6 +16,7 @@ class CronJob(typing.NamedTuple):
     name: str
     date_create: str
     date_update: str
+    active: int
 
 
 class TriggerAioCron(trigger.TriggerBase):
@@ -25,9 +26,9 @@ class TriggerAioCron(trigger.TriggerBase):
 
     def add_job(self, cron_exp: str, command: str, param: str,
                 date_create: str, date_update: typing.Optional[str] = None,
-                uuid: typing.Optional[str] = None, name: str = '',
+                uuid: typing.Optional[str] = None, name: str = '', active: int = 1,
                 update: bool = True) -> typing.Optional[trigger.JobInfo]:
-        self._py_logger.info('新建trigger job 任务名:%s', name)
+        self._py_logger.info('新建trigger job 任务名:%s active=%s', name, active)
         self._py_logger.debug('job 周期:%s 命令:%s', cron_exp, command)
         if uuid is None:
             uuid = uuid4().hex
@@ -46,10 +47,10 @@ class TriggerAioCron(trigger.TriggerBase):
         cron = aiocron.Cron(spec=cron_exp,
                             func=job_func,
                             args=(self._core, command, param),
-                            start=True,
+                            start=True if active == 1 else False,
                             uuid=uuid
                             )
-        self._job_dict[uuid] = CronJob(cron, command, param, name, date_create, date_update or date_create)
+        self._job_dict[uuid] = CronJob(cron, command, param, name, date_create, date_update or date_create, active)
         return self._cronjob_to_jobinfo(self._job_dict[uuid])
 
     def update_job(self, uuid: str, cron_exp: str, command: str, param: str,
@@ -72,6 +73,28 @@ class TriggerAioCron(trigger.TriggerBase):
         job.cron.stop()
         return self._cronjob_to_jobinfo(job)
 
+    def stop_job(self, uuid: str) -> typing.Optional[trigger.JobInfo]:
+        self._py_logger.info('从trigger停止任务 %s', uuid)
+        if uuid not in self:
+            self._py_logger.warning('uuid不存在于trigger 不可停止: %s', uuid)
+            return None
+        job = self._job_dict.pop(uuid)
+        job.cron.stop()
+        self._job_dict[uuid] = CronJob(job.cron, job.command, job.param, job.name,
+                                       job.date_create, job.date_update, 0)
+        return self._cronjob_to_jobinfo(self._job_dict[uuid])
+
+    def start_job(self, uuid: str) -> typing.Optional[trigger.JobInfo]:
+        self._py_logger.info('从trigger启动任务 %s', uuid)
+        if uuid not in self:
+            self._py_logger.warning('uuid不存在于trigger 不可启动: %s', uuid)
+            return None
+        job = self._job_dict.pop(uuid)
+        job.cron.start()
+        self._job_dict[uuid] = CronJob(job.cron, job.command, job.param, job.name,
+                                       job.date_create, job.date_update, 1)
+        return self._cronjob_to_jobinfo(self._job_dict[uuid])
+
     def get_jobs(self) -> typing.Dict[str, trigger.JobInfo]:
         self._py_logger.debug('从trigger中获取所有任务')
         return {uuid: self._cronjob_to_jobinfo(cronjob)
@@ -91,7 +114,8 @@ class TriggerAioCron(trigger.TriggerBase):
     @staticmethod
     def _cronjob_to_jobinfo(job: CronJob) -> trigger.JobInfo:
         return trigger.JobInfo(job.cron.uuid, job.cron.spec, job.command,
-                               job.param, job.name, job.date_create, job.date_update)
+                               job.param, job.name, job.date_create, job.date_update,
+                               job.active)
 
     def __contains__(self, uuid: str) -> bool:
         return uuid in self._job_dict

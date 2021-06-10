@@ -121,6 +121,7 @@ class AioSqliteStorage(storage.StorageBase):
                 name NVARCHAR NOT NULL,
                 date_create TEXT NOT NULL,
                 date_update TEXT NOT NULL,
+                active INTEGER DEFAULT 1,
                 deleted INTEGER DEFAULT 0
             );
         """
@@ -152,7 +153,7 @@ class AioSqliteStorage(storage.StorageBase):
                 if len(row) == 0:
                     self._py_logger.warning('任务不存在于storage uuid:%s', uuid)
                     return None
-                return trigger.JobInfo(row[0], row[1], row[2], row[3], row[4], row[5], row[6])
+                return trigger.JobInfo(row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7])
 
     async def get_all_jobs(self) -> typing.Dict[str, trigger.JobInfo]:
         sql = r"""SELECT * FROM jobs WHERE deleted=0"""
@@ -163,12 +164,12 @@ class AioSqliteStorage(storage.StorageBase):
                     self._py_logger.warning('storage中无任务')
                     return {}
                 return {row[0]: trigger.JobInfo(row[0], row[1], row[2],
-                                                row[3], row[4], row[5], row[6])
+                                                row[3], row[4], row[5], row[6], row[7])
                         for row in rows}
 
     async def save_job(self, job_info: trigger.JobInfo) -> typing.Optional[trigger.JobInfo]:
-        sql = r"""INSERT INTO jobs (uuid, cron_exp, command, param, name, date_create, date_update)
-                    VALUES (?, ?, ?, ?, ?, ?, ?);"""
+        sql = r"""INSERT INTO jobs (uuid, cron_exp, command, param, name, date_create, date_update, active)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?);"""
         self._py_logger.debug('在storage中添加新任务 %s', job_info)
         async with self.db_pool.connect() as conn:
             try:
@@ -193,6 +194,18 @@ class AioSqliteStorage(storage.StorageBase):
                 self._py_logger.exception(e)
                 return None
         return uuid
+
+    async def update_job_state(self, uuid: str, active: int) -> None:
+        """更新任务状态 active=1为已激活（默认） active=0为已停止"""
+        sql = r"""UPDATE jobs SET active=? WHERE uuid=?;"""
+        self._py_logger.debug('在storage中更新job状态 active=%s', active)
+        async with self.db_pool.connect() as conn:
+            try:
+                await conn.execute(sql, (active, uuid))
+                await conn.commit()
+            except Exception as e:
+                self._py_logger.error('storage job状态更新失败')
+                self._py_logger.exception(e)
 
     async def job_log_shoot(self, log_path: typing.Union[str, pathlib.Path],
                             shot_state: worker.JobState):

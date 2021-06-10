@@ -74,7 +74,7 @@ class CronWeb:
         """
         self._py_logger.info('添加任务')
         now = datetime.datetime.now()
-        job = self._trigger.add_job(cron_exp, command, param, str(now), uuid=uuid, name=name)
+        job = self._trigger.add_job(cron_exp, command, param, str(now), uuid=uuid, name=name, active=1)
         if job is not None:
             await self._storage.save_job(job)
         return job
@@ -111,6 +111,16 @@ class CronWeb:
         self._py_logger.info('获取所有任务')
         await self.job_check()
         return self._trigger.get_jobs()
+
+    async def update_job_state(self, uuid: str, active: int) -> typing.Optional[trigger.JobInfo]:
+        """更新job active状态"""
+        self._py_logger.info('更新job active状态')
+        await self._storage.update_job_state(uuid, active)
+        if active == 0:
+            job_info = self._trigger.stop_job(uuid)
+        else:
+            job_info = self._trigger.start_job(uuid)
+        return job_info
 
     def stop_all_trigger(self) -> typing.Dict[str, trigger.JobInfo]:
         """停止trigger中的所有任务 但是并不从中删除(暂时不考虑写入数据库 用于停止后避免启动新进程)"""
@@ -176,12 +186,21 @@ class CronWeb:
                 job = jobs_store[uuid]
                 self._trigger.add_job(job.cron_exp, job.command,
                                       job.param, job.date_create,
-                                      job.date_update, job.uuid, job.name)
+                                      job.date_update, job.uuid, job.name, job.active)
         loaded_uuid = uuid_trigger - uuid_store
         if loaded_uuid:
+            # 这种情况可能不会出现
             self._py_logger.info('停止storage中不存在的trigger任务')
             for uuid in loaded_uuid:
                 self._trigger.remove_job(uuid)
+            self._py_logger.info('停止掉%s个trigger任务', len(loaded_uuid))
+
+        active_uuid = {job.uuid for job in jobs_store.values() if job.active == 1}
+        loaded_uuid = uuid_trigger - active_uuid
+        if loaded_uuid:
+            self._py_logger.info('停止storage中已设置为停止的trigger任务')
+            for uuid in loaded_uuid:
+                self._trigger.stop_job(uuid)
             self._py_logger.info('停止掉%s个trigger任务', len(loaded_uuid))
 
         running_job_storage = await self._storage.job_logs_get_by_state(worker.JobStateEnum.RUNNING)

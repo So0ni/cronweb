@@ -105,6 +105,17 @@ class WebFastAPI(web.WebBase):
                 return {'response': 'uuid不存在', 'code': 2}
             return {'response': '删除成功', 'code': 0}
 
+        class ActiveInfo(pydantic.BaseModel):
+            active: int
+
+        @self.app.post('/api/job/{uuid}/active', dependencies=[fastapi.Depends(check_auth)])
+        async def update_job_state(uuid: str, act_info: ActiveInfo):
+            """active==0为停止 active==1为启动"""
+            job = await self._core.update_job_state(uuid, act_info.active)
+            if not job:
+                return {'response': 'uuid不存在', 'code': 2}
+            return {'response': 'active状态更新成功', 'code': 0}
+
         @self.app.get('/api/jobs', dependencies=[fastapi.Depends(check_auth)])
         async def get_all_jobs():
             """
