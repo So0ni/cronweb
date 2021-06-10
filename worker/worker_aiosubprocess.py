@@ -30,7 +30,7 @@ class AioSubprocessWorker(worker.WorkerBase):
         await self._core.set_job_running(log_path, job_state)
         self._running_jobs[shot_id] = (uuid, proc, job_state)
         await queue.put(f'shot_id: {shot_id}\nuuid: {uuid}\n'
-                        f'command: {command}\nparam: {param}\n\n####OUTPUT####\n')
+                        f'command: {command}\nparam: {param}\n\n#### OUTPUT ####\n')
         default_encoding = locale.getpreferredencoding()
         while True:
             try:
@@ -38,7 +38,7 @@ class AioSubprocessWorker(worker.WorkerBase):
                 if not line:
                     # test?进程运行结束时自动关闭管道并发送EOF？如果不是wait会导致可能的死锁
                     exit_code = await proc.wait()
-                    await queue.put(f'\n####OUTPUT END####\n\nExit Code: {exit_code}')
+                    await queue.put(f'\n#### OUTPUT END ####\n\nExit Code: {exit_code}')
                     await queue.put(logger.LogStop)
                     if exit_code == 0:
                         state_proc = worker.JobStateEnum.DONE
