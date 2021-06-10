@@ -136,7 +136,9 @@ class WebFastAPI(web.WebBase):
             """
             try:
                 jobs = await self._core.get_jobs()
-                return {'response': [job._asdict() for job in jobs.values()], 'code': 0}
+                job_list = [job._asdict() for job in jobs.values()]
+                job_list.sort(key=lambda x: x['date_create'])
+                return {'response': job_list, 'code': 0}
             except Exception as e:
                 self._py_logger.exception(e)
                 return {'response': str(e), 'code': 2}
