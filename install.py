@@ -20,7 +20,7 @@ def check_py_version():
 
 
 def check_secure():
-    print('检查安全性')
+    print('检查安全性...')
     import getpass
     user = getpass.getuser()
     if user == 'root' or user == 'Administrator':
@@ -78,6 +78,20 @@ def create_venv():
 
 def install_pkg():
     print('安装必要依赖...')
+    import subprocess
+    import platform
+    from pathlib import Path
+    dir_project = Path(__file__).parent
+    dir_venv = dir_project / '.venv'
+    if platform.system() == 'Windows':
+        bin_python = dir_venv / 'Scripts' / 'python.exe'
+    else:
+        bin_python = dir_venv / 'bin' / 'python'
+    if bin_python.exists():
+        print(f'{bin_python}不存在 退出')
+        sys.exit(3)
+    file_req = dir_project / 'requirements.txt'
+    subprocess.check_call([sys.executable, '-m', 'pip', 'install', '-r', str(file_req)])
 
 
 def common_operation():
@@ -88,30 +102,62 @@ def common_operation():
     install_pkg()
 
 
-# 系统区别操作
+# 系统操作
 
-def windows():
+def before_linux():
+    print('检查环境要求...')
+
+    def check_venv():
+        failed_list = []
+        try:
+            import venv
+        except ModuleNotFoundError:
+            failed_list.append('venv')
+            pass
+        if failed_list:
+            print(f'当前Python环境没有安装{failed_list}，请安装后重试')
+            sys.exit(3)
+
+    check_venv()
+
+
+def before_windows():
     pass
 
 
-def linux():
+def before_macos():
     pass
 
 
-def macos():
+# 善后
+
+def after_linux():
+    pass
+
+
+def after_windows():
+    pass
+
+
+def after_macos():
     pass
 
 
 def route():
-    common_operation()
     import platform
     system = platform.system()
     if system == 'Linux':
-        linux()
+        before_linux()
+        common_operation()
+        after_linux()
     elif system == 'Windows':
-        windows()
+        before_windows()
+        common_operation()
+        after_windows()
     elif system == 'Darwin':
-        macos()
+        before_macos()
+        common_operation()
+        after_macos()
     else:
         print(f'对于当前系统你可能需要手动进行配置{system}')
         sys.exit(3)
