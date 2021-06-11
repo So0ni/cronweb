@@ -26,6 +26,7 @@ else:
 
 class CronWeb:
     def __init__(self,
+                 dir_project: typing.Optional[typing.Union[str, pathlib.Path]] = None,
                  worker_instance: typing.Optional[worker.WorkerBase] = None,
                  storage_instance: typing.Optional[storage.StorageBase] = None,
                  trigger_instance: typing.Optional[trigger.TriggerBase] = None,
@@ -41,6 +42,8 @@ class CronWeb:
         self._py_logger: logging.Logger = logging.getLogger(f'cronweb.{self.__class__.__name__}')
         self._loop: asyncio.AbstractEventLoop = asyncio.get_event_loop()
         self._log_check_handle: typing.Optional[asyncio.TimerHandle] = None
+
+        self.dir_project = pathlib.Path(dir_project) if dir_project else pathlib.Path(__file__).parent.parent
 
     def set_storage(self, storage_instance: storage.StorageBase):
         self._storage = storage_instance

@@ -1,3 +1,5 @@
+import os
+import json
 import asyncio
 import datetime
 import typing
@@ -13,15 +15,32 @@ class AioSubprocessWorker(worker.WorkerBase):
     def __init__(self, controller: typing.Optional[cronweb.CronWeb] = None):
         super().__init__(controller)
         self._running_jobs: typing.Dict[str, typing.Tuple[str, asyncio.subprocess.Process, worker.JobState]] = {}
+        self._env: typing.Optional[typing.Dict[str, str]] = None
+        if self._core is not None:
+            self.load_env()
+
+    def load_env(self):
+        self._py_logger.info('trigger载入子进程环境变量')
+        file_env = self._core.dir_project / '.env_subprocess.json'
+        if file_env.exists():
+            self._py_logger.info('.env_subprocess.json文件存在，读取其中内容作为环境变量')
+            with open(file_env, 'r', encoding='utf8') as fp:
+                self._env = json.load(fp)
+        else:
+            self._py_logger.info('.env_subprocess.json文件不存在，使用默认环境变量')
+            self._env = dict(os.environ)
 
     async def shoot(self, command: str, param: str, uuid: str, timeout: float) -> None:
+        if self._env is None:
+            self.load_env()
         shot_id = uuid4().hex
         self._py_logger.debug('执行启动 uuid:%s command:%s param:%s', uuid, command, param)
         proc = await asyncio.create_subprocess_shell(
             # 只有当param存在时传入param参数(用于传递特殊参数 约定后可以是json)
             f'{command} --param {param}' if param else command,
             stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.STDOUT
+            stderr=asyncio.subprocess.STDOUT,
+            env=self._env
         )
         now = datetime.datetime.now()
         queue, log_path = self._core.get_log_queue(uuid, shot_id)
