@@ -4,3 +4,4 @@ aiocron
 aiofile
 aiofiles
 aiosqlite
+pyyaml

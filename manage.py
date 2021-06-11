@@ -14,6 +14,8 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import asyncio
+import pathlib
+
 import cronweb
 import logger.logger_aio
 import storage.storage_aiosqlite
@@ -22,30 +24,36 @@ import web.web_fastapi
 import worker.worker_aiosubprocess
 import logging
 import logging.config
-import json
+import yaml
+import typing
 
 
-async def init() -> cronweb.CronWeb:
+def load_config(path_config: typing.Optional[typing.Union[str, pathlib.Path]] = None) -> typing.Dict[str, typing.Any]:
+    path_config = pathlib.Path(path_config) if path_config else pathlib.Path(__file__).parent / 'config.yaml'
+    if not path_config.exists():
+        raise IOError(f'配置文件{path_config}不存在')
+    with open(path_config, 'r', encoding='utf8') as fp:
+        config = yaml.load(fp, Loader=yaml.SafeLoader)
+        return config
+
+
+async def init(path_config: typing.Optional[typing.Union[str, pathlib.Path]] = None) -> cronweb.CronWeb:
+    config = load_config(path_config)
+    logging.config.dictConfig(config['pylogger'])
+
     core = cronweb.CronWeb()
-    logger_core = logger.logger_aio.AioLogger('./logs')
-    trigger_core = trigger.trigger_aiocron.TriggerAioCron(core)
-    web_core = web.web_fastapi.WebFastAPI(core)
-    worker_core = worker.worker_aiosubprocess.AioSubprocessWorker(core)
-    storage_core = await storage.storage_aiosqlite.AioSqliteStorage.create('./logs.sqlite3')
+    logger_core = logger.logger_aio.AioLogger(controller=core, **config['logger'])
+    trigger_core = trigger.trigger_aiocron.TriggerAioCron(controller=core)
+    web_core = web.web_fastapi.WebFastAPI(controller=core, **config['web'])
+    worker_core = worker.worker_aiosubprocess.AioSubprocessWorker(controller=core)
+    storage_core = await storage.storage_aiosqlite.AioSqliteStorage.create(**config['storage'])
     core.set_web_default(web_core).set_worker_default(worker_core). \
         set_trigger_default(trigger_core).set_log_default(logger_core). \
         set_storage(storage_core)
     return core
 
 
-def log_config():
-    with open('config_log.json', 'r') as fp:
-        config = json.load(fp)
-        logging.config.dictConfig(config)
-
-
 async def main():
-    log_config()
     core = await init()
     await core.run()
 
