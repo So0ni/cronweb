@@ -167,7 +167,8 @@ def after_linux():
         user = input('输入用于运行CronWeb的用户的用户名(默认为cronweb): ').strip() or 'cronweb'
         group = user
         command = f'{bin_python.absolute()} {dir_project.absolute() / "manage.py"} run'
-        service_str = tmpl_service.format(user=user, group=group, exec=command)
+        pwd = str(dir_project)
+        service_str = tmpl_service.format(user=user, group=group, exec=command, pwd=pwd)
         file_service = dir_project / 'cronweb.service'
         with open(file_service, 'w', encoding='utf8') as fp:
             fp.write(service_str)

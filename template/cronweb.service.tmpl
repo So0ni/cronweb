@@ -4,6 +4,7 @@ Description=CronWeb daemon
 [Service]
 Group={group}
 User={user}
+WorkingDirectory={pwd}
 Restart=always
 Type=simple
 ExecStart={exec}
