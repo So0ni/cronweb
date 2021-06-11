@@ -216,3 +216,4 @@ logs.sqlite3
 .idea/
 .env_subprocess.json
 config.yaml
+.venv/
