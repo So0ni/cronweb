@@ -12,10 +12,16 @@ import typing
 class WebFastAPI(web.WebBase):
     def __init__(self, controller: typing.Optional[cronweb.CronWeb] = None,
                  secret: typing.Optional[str] = None,
+                 host: typing.Optional[str] = None,
+                 port: typing.Optional[int] = None,
+                 uv_kwargs: typing.Optional[typing.Dict[str, typing.Any]] = None,
                  fa_kwargs: typing.Optional[typing.Dict[str, typing.Any]] = None):
         super().__init__(controller)
         fa_kwargs = fa_kwargs if fa_kwargs else {}
+        self.uv_kwargs = uv_kwargs if uv_kwargs else {}
         self.secret = secret
+        self.host = host
+        self.port = port
         self.app = fastapi.FastAPI(**fa_kwargs)
         self.init_api()
 
@@ -224,7 +230,12 @@ class WebFastAPI(web.WebBase):
         self._py_logger.info('添加fastAPI shutdown回调')
         self.app.on_event('shutdown')(func)
 
-    async def start_server(self, host: str = '127.0.0.1', port: int = 8000, **kwargs):
-        config = uvicorn.Config(self.app, host, port, workers=1, **kwargs)
+    async def start_server(self, host: typing.Optional[str] = None,
+                           port: typing.Optional[int] = None, **kwargs):
+        host = host or self.host or '127.0.0.1'
+        port = port or self.port or 8000
+        uv_kwargs = self.uv_kwargs.copy()
+        uv_kwargs.update(kwargs)
+        config = uvicorn.Config(self.app, host, port, workers=1, **uv_kwargs)
         server = uvicorn.Server(config)
         return await server.serve()

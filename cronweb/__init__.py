@@ -302,7 +302,8 @@ class CronWeb:
         await self.job_check()
         await self._storage.stop()
 
-    async def run(self, host: str = '127.0.0.1', port: int = 8000, **kwargs):
+    async def run(self, host: typing.Optional[str] = None,
+                  port: typing.Optional[int] = None, **kwargs):
         self._py_logger.info('启动fastAPI')
         self._web.on_shutdown(self.stop)
         self._timing_check()

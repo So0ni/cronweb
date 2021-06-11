@@ -15,7 +15,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import asyncio
 import pathlib
-
+import argparse
 import cronweb
 import logger.logger_aio
 import storage.storage_aiosqlite
@@ -37,8 +37,7 @@ def load_config(path_config: typing.Optional[typing.Union[str, pathlib.Path]] = 
         return config
 
 
-async def init(path_config: typing.Optional[typing.Union[str, pathlib.Path]] = None) -> cronweb.CronWeb:
-    config = load_config(path_config)
+async def init(config: typing.Dict[str, typing.Any]) -> cronweb.CronWeb:
     logging.config.dictConfig(config['pylogger'])
 
     core = cronweb.CronWeb()
@@ -53,8 +52,9 @@ async def init(path_config: typing.Optional[typing.Union[str, pathlib.Path]] = N
     return core
 
 
-async def main():
-    core = await init()
+async def main(path_config: typing.Optional[typing.Union[str, pathlib.Path]] = None):
+    config = load_config(path_config)
+    core = await init(config)
     await core.run()
 
 
