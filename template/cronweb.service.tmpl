@@ -1,0 +1,12 @@
+[Unit]
+Description=CronWeb daemon
+
+[Service]
+Group={group}
+User={user}
+Restart=always
+Type=simple
+ExecStart={exec}
+
+[Install]
+WantedBy=multi-user.target
