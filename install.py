@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import os
+import pathlib
 import sys
 
 
@@ -23,6 +24,9 @@ def check_secure():
     print('检查安全性...')
     import getpass
     user = getpass.getuser()
+    if system == 'Linux' and pathlib.Path('/.dockerenv').exists():
+        print('你似乎处于Docker环境中，但是你仍然需要针对Docker进行一些设置以提高安全性')
+        return None
     if user == 'root' or user == 'Administrator':
         print('你现在正在以管理员(root或Administrator)身份运行!\n'
               '虽然这个安装程序并不对外暴露任何端口也不会留存任何进程，但是使用管理员权限运行会导致生成的文件'
@@ -165,7 +169,8 @@ def after_linux():
         with open(file_tmpl_service, 'r', encoding='utf8') as fp:
             tmpl_service = fp.read()
         global user, group
-        user = input('输入用于运行CronWeb的用户的用户名(默认为cronweb): ').strip() or 'cronweb'
+        import getpass
+        user = input('输入用于运行CronWeb的用户的用户名(默认为当前用户): ').strip() or getpass.getuser()
         group = user
         command = f'{bin_python.absolute()} {dir_project.absolute() / "manage.py"} run'
         pwd = str(dir_project)
