@@ -33,6 +33,13 @@ def check_secure():
 def generate_config_file():
     print('从模板生成配置文件...')
     file_tmpl_config = dir_project / 'template' / 'config.yaml.tmpl'
+    file_config = dir_project / 'config.yaml'
+    if file_config.exists():
+        yes_or_no = input('配置文件似乎已经存在，需要替换吗?(yes, no): ').strip().lower()
+        if yes_or_no != 'yes':
+            print(f'你的回答并非yes, 跳过配置文件替换')
+            return None
+
     with open(file_tmpl_config, 'r', encoding='utf8') as fp:
         tmpl_config = fp.read()
     secret = input('输入新的API密码: ').strip()
@@ -48,15 +55,8 @@ def generate_config_file():
         'db_path': db_path, 'log_dir': log_dir,
         'log_level': log_level
     })
-    file_config = dir_project / 'config.yaml'
     if not file_config.parent.exists():
         file_config.parent.mkdir(parents=True)
-
-    if file_config.exists():
-        yes_or_no = input('配置文件似乎已经存在，需要替换吗?(yes, no): ').strip().lower()
-        if yes_or_no != 'yes':
-            print(f'你的回答并非yes, 跳过配置文件替换')
-            return None
 
     with open(file_config, 'w', encoding='utf8') as fp:
         fp.write(config_str)
