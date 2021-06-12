@@ -56,6 +56,10 @@ class TriggerBase(abc.ABC):
         pass
 
     @abc.abstractmethod
+    def trigger_manual(self, uuid: str) -> typing.Optional[JobInfo]:
+        pass
+
+    @abc.abstractmethod
     def get_jobs(self) -> typing.Dict[str, JobInfo]:
         pass
 

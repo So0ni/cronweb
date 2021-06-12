@@ -95,6 +95,15 @@ class TriggerAioCron(trigger.TriggerBase):
                                        job.date_create, job.date_update, 1)
         return self._cronjob_to_jobinfo(self._job_dict[uuid])
 
+    def trigger_manual(self, uuid: str) -> typing.Optional[trigger.JobInfo]:
+        self._py_logger.info('手动触发trigger任务 %s', uuid)
+        if uuid not in self:
+            self._py_logger.warning('uuid不存在于trigger 不可启动: %s', uuid)
+            return None
+        job = self._job_dict[uuid]
+        job.cron.call_func()
+        return self._cronjob_to_jobinfo(job)
+
     def get_jobs(self) -> typing.Dict[str, trigger.JobInfo]:
         self._py_logger.debug('从trigger中获取所有任务')
         return {uuid: self._cronjob_to_jobinfo(cronjob)

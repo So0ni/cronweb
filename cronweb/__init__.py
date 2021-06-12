@@ -110,6 +110,14 @@ class CronWeb:
             await self._storage.job_logs_set_deleted(uuid)
         return job
 
+    def trigger_job(self, uuid: str) -> typing.Optional[trigger.JobInfo]:
+        """手动启动任务 并且不关心任务active状态
+        成功删除返回job info 失败(uuid不存在)返回None
+        """
+        self._py_logger.info('手动触发任务')
+        job = self._trigger.trigger_manual(uuid)
+        return job
+
     async def get_jobs(self) -> typing.Dict[str, trigger.JobInfo]:
         """获取所有job的dict 获取前会执行job检查"""
         self._py_logger.info('获取所有任务')
