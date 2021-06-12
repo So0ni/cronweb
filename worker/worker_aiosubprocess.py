@@ -38,9 +38,9 @@ class AioSubprocessWorker(worker.WorkerBase):
             self._env = dict(os.environ)
 
         if self._work_dir is None:
-            self._scripts_dir = pathlib.Path(self._core.dir_project / 'scripts').absolute()
-            if not self._scripts_dir.exists():
-                self._scripts_dir.mkdir(parents=True)
+            self._work_dir = pathlib.Path(self._core.dir_project / 'scripts').absolute()
+            if not self._work_dir.exists():
+                self._work_dir.mkdir(parents=True)
 
     async def shoot(self, command: str, param: str, uuid: str, timeout: float) -> None:
         if self._env is None:
@@ -54,7 +54,7 @@ class AioSubprocessWorker(worker.WorkerBase):
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.STDOUT,
             env=self._env,
-            cwd=str(self._work_dir) if self._work_dir else str(self._scripts_dir)
+            cwd=str(self._work_dir)
         )
         now = datetime.datetime.now()
         queue, log_path = self._core.get_log_queue(uuid, shot_id)

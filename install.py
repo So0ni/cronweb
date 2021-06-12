@@ -50,10 +50,11 @@ def generate_config_file():
     log_dir = input('输入子进程日志文件存放路径(留空为默认项目目录下的logs目录): '
                     ).strip() or f'{dir_project / "logs"}'
     log_level = input('输入CronWeb日志等级(留空为默认DEBUG): ').strip() or 'DEBUG'
+    work_dir = input('输入任务的工作目录(留空为默认项目目录下scripts目录): ').strip() or {dir_project / "scripts"}
     config_str = tmpl_config.format(**{
         'secret': secret, 'host': host, 'port': port,
         'db_path': db_path, 'log_dir': log_dir,
-        'log_level': log_level
+        'log_level': log_level, 'work_dir': work_dir
     })
     if not file_config.parent.exists():
         file_config.parent.mkdir(parents=True)
@@ -206,7 +207,7 @@ def route():
 
     global system, dir_project
     system = platform.system()
-    dir_project = Path(__file__).parent
+    dir_project = Path(__file__).parent.absolute()
 
     if system == 'Linux':
         before_linux()

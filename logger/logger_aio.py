@@ -13,7 +13,7 @@ class AioLogger(logger.LoggerBase):
     def __init__(self, log_dir: typing.Union[str, pathlib.Path],
                  controller: typing.Optional[cronweb.CronWeb] = None):
         super().__init__(controller)
-        self.log_dir = pathlib.Path(log_dir)
+        self.log_dir = pathlib.Path(log_dir).absolute()
         self.task_dict: typing.Dict[str, asyncio.Task] = {}
         if not self.log_dir.exists():
             self.log_dir.mkdir(parents=True)

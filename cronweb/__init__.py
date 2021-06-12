@@ -45,6 +45,8 @@ class CronWeb:
 
         self.dir_project = pathlib.Path(dir_project).absolute() if dir_project else \
             pathlib.Path(__file__).parent.parent.absolute()
+        if self.dir_project.exists():
+            os.chdir(self.dir_project)
 
     def set_storage(self, storage_instance: storage.StorageBase):
         self._storage = storage_instance

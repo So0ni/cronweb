@@ -17,7 +17,7 @@ class AioSqlitePool:
                  pool_size: int):
         self._idle_queue: asyncio.Queue[aiosqlite.Connection] = asyncio.Queue()
         self._busy_set: typing.Set[aiosqlite.Connection] = set()
-        self._db_path = db_path
+        self._db_path = pathlib.Path(db_path).absolute()
         self._pool_size = pool_size
         self._lock = asyncio.Lock()
         self._pool_size_limit = self._pool_size + 2
