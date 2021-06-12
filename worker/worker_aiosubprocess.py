@@ -83,7 +83,7 @@ class AioSubprocessWorker(worker.WorkerBase):
                 await queue.put(line.decode(default_encoding))
             except asyncio.TimeoutError:
                 self._py_logger.error('等待stdout %ss超时 shot_id:%s', timeout, shot_id)
-                await queue.put(f'Killed Timeout {timeout}s')
+                await queue.put(f'\n#### OUTPUT END ####\n\nKilled Timeout {timeout}s')
                 await queue.put(logger.LogStop)
                 proc.kill()
                 self._py_logger.error('任务超时 killed shot_id:%s', shot_id)
