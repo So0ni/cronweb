@@ -1,5 +1,6 @@
 import os
 import json
+import pathlib
 import asyncio
 import datetime
 import typing
@@ -12,10 +13,16 @@ from uuid import uuid4
 
 
 class AioSubprocessWorker(worker.WorkerBase):
-    def __init__(self, controller: typing.Optional[cronweb.CronWeb] = None):
+    def __init__(self, controller: typing.Optional[cronweb.CronWeb] = None,
+                 work_dir: typing.Optional[typing.Union[str, pathlib.Path]] = None):
         super().__init__(controller)
         self._running_jobs: typing.Dict[str, typing.Tuple[str, asyncio.subprocess.Process, worker.JobState]] = {}
         self._env: typing.Optional[typing.Dict[str, str]] = None
+        self._scripts_dir: typing.Optional[typing.Union[str, pathlib.Path]] = None
+        self._work_dir = pathlib.Path(work_dir).absolute() if work_dir else None
+        if self._work_dir is not None and not self._work_dir.exists():
+            self._work_dir.mkdir(parents=True)
+
         if self._core is not None:
             self.load_env()
 
@@ -30,17 +37,24 @@ class AioSubprocessWorker(worker.WorkerBase):
             self._py_logger.info('.env_subprocess.json文件不存在，使用默认环境变量')
             self._env = dict(os.environ)
 
+        if self._work_dir is None:
+            self._scripts_dir = pathlib.Path(self._core.dir_project / 'scripts').absolute()
+            if not self._scripts_dir.exists():
+                self._scripts_dir.mkdir(parents=True)
+
     async def shoot(self, command: str, param: str, uuid: str, timeout: float) -> None:
         if self._env is None:
             self.load_env()
         shot_id = uuid4().hex
         self._py_logger.debug('执行启动 uuid:%s command:%s param:%s', uuid, command, param)
+
         proc = await asyncio.create_subprocess_shell(
             # 只有当param存在时传入param参数(用于传递特殊参数 约定后可以是json)
             f'{command} --param {param}' if param else command,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.STDOUT,
-            env=self._env
+            env=self._env,
+            cwd=str(self._work_dir) if self._work_dir else str(self._scripts_dir)
         )
         now = datetime.datetime.now()
         queue, log_path = self._core.get_log_queue(uuid, shot_id)
