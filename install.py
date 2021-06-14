@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
+import argparse
 import os
 import pathlib
 import sys
+import typing
+import subprocess
 
 
 def risk_tips():
@@ -100,7 +103,6 @@ def create_certs():
     if client_cert is not True:
         print('未配置客户端证书加密，跳过证书生成过程')
         return None
-    import subprocess
     try:
         subprocess.check_call(['openssl', 'version'], stdout=subprocess.DEVNULL)
     except FileNotFoundError:
@@ -131,7 +133,7 @@ def create_certs():
 
             except subprocess.CalledProcessError:
                 print('服务端证书生成失败，你可能需要手动操作')
-            print('请保证服务端证书私钥不被泄露')
+            print('请保证服务端证书私钥不被泄露，某些情况下你需要手动信任服务器的自签证书')
 
     if not file_ca.exists():
         yes_or_no = input('客户端CA证书不存在，要生成吗?([yes], no): ').strip().lower()
@@ -172,7 +174,6 @@ def create_venv():
 
 def install_pkg():
     print('安装必要依赖...')
-    import subprocess
     if not bin_python.exists():
         print(f'{bin_python}不存在 退出')
         sys.exit(3)
@@ -245,7 +246,6 @@ def before_macos():
 
 def after_linux():
     def check_systemd():
-        import subprocess
         out = subprocess.check_output(['ps', '--no-headers', '-o', 'comm', '1']).decode().strip()
         if 'systemd' not in out:
             print('当前系统并未使用systemd，不需要生成service文件')
@@ -296,11 +296,9 @@ def after_macos():
 
 def route():
     import platform
-    from pathlib import Path
 
-    global system, dir_project
+    global system
     system = platform.system()
-    dir_project = Path(__file__).parent.absolute()
 
     if system == 'Linux':
         before_linux()
@@ -319,5 +317,78 @@ def route():
         sys.exit(3)
 
 
+def gen_user_cert(
+        path_key: typing.Optional[typing.Union[str, pathlib.Path]],
+        path_cert: typing.Optional[typing.Union[str, pathlib.Path]],
+        serial: str
+):
+    path_key = pathlib.Path(path_key) if path_key else (dir_project / 'certs' / 'client_ca.key')
+    path_cert = pathlib.Path(path_cert) if path_cert else (dir_project / 'certs' / 'client_ca.pem')
+    if not path_key.exists() or not path_cert.exists():
+        raise FileNotFoundError('客户端CA证书私钥或公钥不存在')
+
+    try:
+        subprocess.check_call(['openssl', 'version'], stdout=subprocess.DEVNULL)
+    except FileNotFoundError:
+        print('似乎没有安装openssl，你可能需要手动生成客户端证书')
+        return None
+
+    path_user_cert = dir_project / 'dist' / f'user_{serial}.pem'
+    path_user_key = dir_project / 'dist' / f'user_{serial}.key'
+    path_user_csr = dir_project / 'dist' / f'user_{serial}.csr'
+    path_user_pfx = dir_project / 'dist' / f'user_{serial}.pfx'
+
+    if not path_user_cert.parent.exists():
+        path_user_cert.parent.mkdir(parents=True)
+
+    print('生成客户端证书私钥')
+    subprocess.check_call([
+        'openssl', 'genrsa', '-out', str(path_user_key), '2048'
+    ])
+
+    print('生成客户端证书公钥')
+    subprocess.check_call([
+        'openssl', 'req', '-new', '-key', str(path_user_key),
+        '-out', str(path_user_csr), '-subj', f'/CN=CronWeb_user_{serial}'
+    ])
+    subprocess.check_call([
+        'openssl', 'x509', '-req', '-days', '365',
+        '-in', str(path_user_csr), '-out', str(path_user_cert),
+        '-CAkey', str(path_key), '-CA', str(path_cert), '-set_serial', serial
+    ])
+
+    print('生成pfx证书')
+    password = input('输入pfx证书密码(不建议留空): ').strip()
+    subprocess.check_call([
+        'openssl', 'pkcs12', '-export',
+        '-out', str(path_user_pfx), '-inkey', str(path_user_key),
+        '-in', str(path_user_cert), '-certfile', str(path_cert),
+        '-password', f'pass:{password}'
+    ])
+
+    print('客户端证书生成完成，请保护好生成的客户端证书')
+
+
 if __name__ == '__main__':
-    route()
+    global dir_project
+    dir_project = pathlib.Path(__file__).parent.absolute()
+
+    parser = argparse.ArgumentParser(description='CronWeb安装工具')
+    parser.add_argument('command', nargs='?', type=str, help='生成服务证书',
+                        choices=['gen-user']
+                        )
+    parser.add_argument('-s', '--serial', nargs='?', type=str, default=None,
+                        help='指定生成的客户端证书序号')
+    parser.add_argument('-k', '--ca-key', nargs='?', type=str,
+                        default=None,
+                        help='客户端CA证书公钥路径(默认为certs/client_ca.pem)')
+    parser.add_argument('-c', '--ca-cert', nargs='?', type=str,
+                        default=None,
+                        help='客户端CA证书私钥路径(默认为cert/client_ca.key)')
+    args = parser.parse_args()
+    print(args)
+
+    if args.command is None:
+        route()
+    elif args.command == 'gen-user':
+        gen_user_cert(args.ca_key, args.ca_cert, args.serial)
