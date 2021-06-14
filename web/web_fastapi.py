@@ -243,6 +243,15 @@ class WebFastAPI(web.WebBase):
         port = port or self.port or 8000
         uv_kwargs = self.uv_kwargs.copy()
         uv_kwargs.update(kwargs)
+        client_cert = uv_kwargs.pop('client_cert', None)
+        if client_cert:
+            if 'ssl_keyfile' not in uv_kwargs or \
+                    'ssl_certfile' not in uv_kwargs or \
+                    'ssl_ca_certs' not in uv_kwargs:
+                raise IOError('启用客户端证书验证需要配置服务端证书和用户证书的可信CA')
+            import ssl
+            uv_kwargs['ssl_cert_reqs'] = ssl.CERT_REQUIRED
+
         config = uvicorn.Config(self.app, host, port, workers=1, **uv_kwargs)
         server = uvicorn.Server(config)
         return await server.serve()
