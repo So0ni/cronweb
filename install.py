@@ -105,6 +105,11 @@ def create_certs():
         return None
     try:
         subprocess.check_call(['openssl', 'version'], stdout=subprocess.DEVNULL)
+        conda_prefix = os.environ.get('CONDA_PREFIX', None)
+        if conda_prefix and system == 'Windows':
+            openssl_conf = pathlib.Path(conda_prefix) / 'Library/openssl.cnf'
+            if openssl_conf.exists():
+                os.environ['OPENSSL_CONF'] = str(openssl_conf)
     except FileNotFoundError:
         print('似乎没有安装openssl，你可能需要手动生成或获取相关证书')
         return None
@@ -295,11 +300,6 @@ def after_macos():
 
 
 def route():
-    import platform
-
-    global system
-    system = platform.system()
-
     if system == 'Linux':
         before_linux()
         common_operation()
@@ -329,6 +329,11 @@ def gen_user_cert(
 
     try:
         subprocess.check_call(['openssl', 'version'], stdout=subprocess.DEVNULL)
+        conda_prefix = os.environ.get('CONDA_PREFIX', None)
+        if conda_prefix and system == 'Windows':
+            openssl_conf = pathlib.Path(conda_prefix) / 'Library/openssl.cnf'
+            if openssl_conf.exists():
+                os.environ['OPENSSL_CONF'] = str(openssl_conf)
     except FileNotFoundError:
         print('似乎没有安装openssl，你可能需要手动生成客户端证书')
         return None
@@ -387,6 +392,11 @@ if __name__ == '__main__':
                         help='客户端CA证书私钥路径(默认为cert/client_ca.key)')
     args = parser.parse_args()
     print(args)
+
+    import platform
+
+    global system
+    system = platform.system()
 
     if args.command is None:
         route()
