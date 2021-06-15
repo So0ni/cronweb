@@ -19,7 +19,7 @@ class WebFastAPI(web.WebBase):
         super().__init__(controller)
         fa_kwargs = fa_kwargs if fa_kwargs else {}
         self.uv_kwargs = uv_kwargs if uv_kwargs else {}
-        self.secret = secret
+        self.secret = secret if secret else None
         self.host = host
         self.port = port
         self.app = fastapi.FastAPI(**fa_kwargs)
