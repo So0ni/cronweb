@@ -349,6 +349,9 @@ def gen_user_cert(
         serial: str,
         config: InfoConfig
 ):
+    if not serial:
+        print('你需要用-s指定一个客户端证书序号')
+        sys.exit(3)
     path_key = pathlib.Path(path_key) if path_key else (config.dir_project / 'certs' / 'client_ca.key')
     path_cert = pathlib.Path(path_cert) if path_cert else (config.dir_project / 'certs' / 'client_ca.pem')
     if not path_key.exists() or not path_cert.exists():
