@@ -94,10 +94,12 @@ def generate_config_file(config: InfoConfig):
     file_tmpl_config = config.dir_project / 'template' / 'config.yaml.tmpl'
     file_config = config.dir_project / 'config.yaml'
     if file_config.exists():
-        if yes_or_no('配置文件似乎已经存在，需要替换吗?: ', default_choice='no'):
-            with open(file_tmpl_config, 'r', encoding='utf8') as fp:
-                tmpl_config = fp.read()
+        if not yes_or_no('配置文件似乎已经存在，需要替换吗?: ', default_choice='no'):
+            print('跳过配置文件替换')
+            return None
 
+    with open(file_tmpl_config, 'r', encoding='utf8') as fp:
+        tmpl_config = fp.read()
     secret = input_default('输入新的API密码: ', default='')
     config.host = input_default(f'输入API监听主机地址(建议留空为默认{config.host}): ', default=config.host)
     config.port = input_default(f'输入API监听主机端口(建议留空为默认{config.port}): ', default=config.port,
@@ -221,6 +223,12 @@ def install_pkg(config: InfoConfig):
 
 def generate_env_subprocess(config: InfoConfig):
     print('生成运行环境配置文件...')
+    path_env_file = config.dir_project / '.env_subprocess.json'
+    if path_env_file.exists():
+        if not yes_or_no('环境文件似乎已经存在，需要替换吗?', 'no'):
+            print('跳过环境文件替换')
+            return None
+
     env_source = dict(os.environ)
     env_source['VIRTUAL_ENV'] = str(config.dir_venv)
     env_source.pop('PYTHONHOME', None)
@@ -228,11 +236,9 @@ def generate_env_subprocess(config: InfoConfig):
         env_source['PATH'] = f"{config.bin_python.parent};{env_source['PATH']}"
     else:
         env_source['PATH'] = f"{config.bin_python.parent}:{env_source['PATH']}"
-    path_env_file = config.dir_project / '.env_subprocess.json'
-    if path_env_file.exists():
-        if yes_or_no('环境文件似乎已经存在，需要替换吗?', 'no'):
-            with open(path_env_file, 'w', encoding='utf8') as fp:
-                json.dump(env_source, fp, ensure_ascii=False, indent=4)
+
+    with open(path_env_file, 'w', encoding='utf8') as fp:
+        json.dump(env_source, fp, ensure_ascii=False, indent=4)
 
 
 def check_openssl(config: InfoConfig) -> bool:
