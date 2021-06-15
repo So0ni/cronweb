@@ -35,16 +35,15 @@ CronWeb是一个不依赖crontab的cron服务，并有一个与之对应的WebUI
 2. 并未隔离被执行的代码，执行非可信代码可能会造成严重的安全问题
 
 
-
 ## Installation
 
 有两种安装办法。(半自动和手动哈哈哈)
 
-### Semi-auto
+### 半自动
 
 使用Python 3.7或以上版本在项目目录执行
 
-```python
+```bash
 python install.py
 ```
 
@@ -77,7 +76,7 @@ python install.py
 5. 对于非Linux用户例如Windows、MacOS用户，
    你需要寻找工具将启动命令封装成服务
 
-### Manual
+### 手动
 
 手动操作的话，对于半自动安装，除了手动操作部分之外，你还需要：
 
@@ -131,10 +130,6 @@ python manage.py run
 ![WebUI 登录页](/assets/ss-login.png)
 
 ![WebUI 控制面板](/assets/ss-main.png)
-
-## TODO
-
-- [] 添加原生的客户端证书支持
 
 ## License
 
