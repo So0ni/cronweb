@@ -166,8 +166,8 @@ def create_certs(config: InfoConfig):
                 subprocess.check_call([
                     'openssl', 'req', '-x509', '-newkey', 'rsa:4096', '-sha256', '-days', '730',
                     '-nodes', '-keyout', f'{file_cert_key}', '-out', f'{file_cert}',
-                    '-subj', f'/CN=CronWeb', '-addext',
-                    f'subjectAltName=IP:{config.host}{",DNS:localhost" if config.host == "127.0.0.1" else ""}'
+                    '-subj', f'/CN=CronWebServer', '-addext',
+                    f'subjectAltName=IP:{config.host}'
                 ])
                 print('服务端自签名证书生成完成\n'
                       f'服务端证书公钥文件路径: {file_cert} \n'
@@ -286,6 +286,7 @@ def after_linux(config: InfoConfig):
             sys.exit(3)
 
     def generate_service_unit():
+        print('生成systemd service文件')
         file_tmpl_service = config.dir_project / 'template' / 'cronweb.service.tmpl'
         with open(file_tmpl_service, 'r', encoding='utf8') as fp:
             tmpl_service = fp.read()
@@ -341,6 +342,7 @@ def route(config: InfoConfig):
     else:
         print(f'对于当前系统你可能需要手动进行配置{config.system}')
         sys.exit(3)
+    print('配置完成，对于某些系统你需要手动将CronWeb配置成服务')
 
 
 def gen_user_cert(
@@ -361,10 +363,10 @@ def gen_user_cert(
         print('似乎没有安装openssl，你可能需要手动生成客户端证书')
         return None
 
-    path_user_cert = config.dir_project / 'dist' / f'user_{serial}.pem'
-    path_user_key = config.dir_project / 'dist' / f'user_{serial}.key'
-    path_user_csr = config.dir_project / 'dist' / f'user_{serial}.csr'
-    path_user_pfx = config.dir_project / 'dist' / f'user_{serial}.pfx'
+    path_user_cert = config.dir_project / 'dist' / f'client_{serial}.pem'
+    path_user_key = config.dir_project / 'dist' / f'client_{serial}.key'
+    path_user_csr = config.dir_project / 'dist' / f'client_{serial}.csr'
+    path_user_pfx = config.dir_project / 'dist' / f'client_{serial}.pfx'
 
     if not path_user_cert.parent.exists():
         path_user_cert.parent.mkdir(parents=True)
@@ -377,7 +379,10 @@ def gen_user_cert(
     print('生成客户端证书公钥')
     subprocess.check_call([
         'openssl', 'req', '-new', '-key', str(path_user_key),
-        '-out', str(path_user_csr), '-subj', f'/CN=CronWeb_user_{serial}'
+        '-out', str(path_user_csr), '-subj', f'/CN=CronWebClient_{serial}',
+        '-addext', 'basicConstraints=CA:FALSE',
+        '-addext', 'extendedKeyUsage=1.3.6.1.5.5.7.3.2',
+        '-addext', 'keyUsage=digitalSignature'
     ])
     subprocess.check_call([
         'openssl', 'x509', '-req', '-days', '365',
