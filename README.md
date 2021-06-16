@@ -8,6 +8,8 @@ CronWeb是一个不依赖crontab的cron服务，并有一个与之对应的WebUI
 
 * 不依赖crontab，这意味着Windows上也能用
 
+* 可以中止正在执行的任务
+
 * 比较轻量(其实就是功能少)
 
 ## Warning
@@ -49,29 +51,29 @@ python install.py
 
 安装脚本会做以下操作：
 
-1. 生成配置文件 config.yaml
+1. 生成配置文件 `config.yaml`
 
 2. 如果选择开启客户端证书认证，且本地环境已安装openssl，
    则在项目下的`certs/`目录生成服务端证书和客户端CA证书
 
-3. 在项目的 .venv 目录生成虚拟环境
+3. 在项目的 `.venv` 目录生成虚拟环境
 
 4. 为虚拟环境安装依赖
 
-5. 生成子进程环境变量配置 .env_subprocess.json
+5. 生成子进程环境变量配置 `.env_subprocess.json`
 
-6. 如果使用Linux系统且使用systemd，则会生成cronweb.service文件
+6. 如果使用Linux系统且使用systemd，则会生成`cronweb.service`文件
 
 你需要手动做的是：
 
-1. 确保执行 install.py 的Python环境有pip和venv两个依赖包
+1. 确保执行 `install.py` 的Python环境有pip和venv两个依赖包
    (这两个包在Linux原生的Python环境中似乎都需要手动安装)
 
-2. 检查config.yaml文件内路径配置或修改
+2. 检查`config.yaml`文件内路径配置或修改
 
-3. 检查.env_subprocess.json文件内的环境变量，删除敏感信息
+3. 检查`.env_subprocess.json`文件内的环境变量，删除敏感信息
 
-4. 检查cronweb.service文件的路径正确性，并将其复制到systemd的目录中，重载systemd
+4. 检查`cronweb.service`文件的路径正确性，并将其复制到systemd的目录中，重载systemd
 
 5. 对于非Linux用户例如Windows、MacOS用户，
    你需要寻找工具将启动命令封装成服务
@@ -118,12 +120,15 @@ python install.py gen-user -s <客户端编号> [-k 客户端CA私钥路径] [-c
 sudo systemctl start cronweb
 ```
 
-或者你需要在shell中执行:
+或者你需要在shell中运行CronWeb(调试):
 
 ```bash
 # 激活虚拟环境(如果有的话)
 python manage.py run
 ```
+## Todo
+
+- 错误重试
 
 ## Screenshots
 
