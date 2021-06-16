@@ -175,12 +175,12 @@ class WebFastAPI(web.WebBase):
             return {'response': [{'shot_id': shot_id, 'uuid': uuid, 'date_start': date_start}
                                  for shot_id, (uuid, date_start) in job_shots.items()], 'code': 0}
 
-        # @self.app.delete('/api/running_jobs/{shot_id}', dependencies=[fastapi.Depends(check_auth)])
-        # async def stop_running_by_shot_id(shot_id: str):
-        #     result = self._core.stop_running_by_shot_id(shot_id)
-        #     if not result:
-        #         return {'response': '此shot_id未在运行', 'code': 2}
-        #     return {'response': '成功', 'code': 0}
+        @self.app.delete('/api/running_jobs/{shot_id}', dependencies=[fastapi.Depends(check_auth)])
+        async def stop_running_by_shot_id(shot_id: str):
+            result = self._core.stop_running_by_shot_id(shot_id)
+            if not result:
+                return {'response': '任务未在运行或已运行结束', 'code': 0}
+            return {'response': '成功停止运行', 'code': 0}
 
         @self.app.get('/api/logs', dependencies=[fastapi.Depends(check_auth)])
         async def get_logs_records_undeleted(limit: int = 50):
