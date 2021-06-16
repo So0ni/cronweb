@@ -45,10 +45,7 @@ async def init(config: typing.Dict[str, typing.Any]) -> cronweb.CronWeb:
     trigger_core = trigger.trigger_aiocron.TriggerAioCron(controller=core)
     web_core = web.web_fastapi.WebFastAPI(controller=core, **config['web'])
     worker_core = worker.worker_aiosubprocess.AioSubprocessWorker(controller=core, **config['worker'])
-    storage_core = await storage.storage_aiosqlite.AioSqliteStorage.create(**config['storage'])
-    core.set_web_default(web_core).set_worker_default(worker_core). \
-        set_trigger_default(trigger_core).set_log_default(logger_core). \
-        set_storage(storage_core)
+    storage_core = await storage.storage_aiosqlite.AioSqliteStorage.create(controller=core, **config['storage'])
     return core
 
 

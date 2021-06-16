@@ -24,9 +24,14 @@ class StorageBase(abc.ABC):
         super().__init__()
         self._core: typing.Optional[cronweb.CronWeb] = controller
         self._py_logger: logging.Logger = logging.getLogger(f'cronweb.{self.__class__.__name__}')
+        self.controller_default()
 
     def set_controller(self, controller: cronweb.CronWeb):
         self._core = controller
+
+    def controller_default(self):
+        if self._core is not None:
+            self._core.set_storage(self)
 
     @classmethod
     @abc.abstractmethod

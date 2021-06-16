@@ -1,15 +1,16 @@
+from __future__ import annotations
 import asyncio
-import datetime
-
 import storage
+import trigger
 import aiosqlite
 import pathlib
 import logging
 import typing
 import contextlib
 
-import trigger
-import worker
+if typing.TYPE_CHECKING:
+    import cronweb
+    import worker
 
 
 class AioSqlitePool:
@@ -84,15 +85,17 @@ class AioSqlitePool:
 
 
 class AioSqliteStorage(storage.StorageBase):
-    def __init__(self, db_pool: AioSqlitePool, db_path: typing.Union[str, pathlib.Path]):
-        super().__init__()
+    def __init__(self, db_pool: AioSqlitePool, db_path: typing.Union[str, pathlib.Path],
+                 controller: typing.Optional[cronweb.CronWeb] = None):
+        super().__init__(controller)
         self.db_pool = db_pool
         self.db_path = db_path
 
     @classmethod
-    async def create(cls, db_path: typing.Union[str, pathlib.Path]):
+    async def create(cls, db_path: typing.Union[str, pathlib.Path],
+                     controller: typing.Optional[cronweb.CronWeb] = None):
         pool = await AioSqlitePool.create_pool(db_path)
-        self = cls(pool, db_path)
+        self = cls(pool, db_path, controller)
         await self.init_db()
         return self
 
