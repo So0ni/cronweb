@@ -1,5 +1,7 @@
 # CronWeb
 
+[![Codacy Badge](https://api.codacy.com/project/badge/Grade/d26364e5d2bc4007b91ea241f2ad8272)](https://app.codacy.com/gh/So0ni/cronweb?utm_source=github.com&utm_medium=referral&utm_content=So0ni/cronweb&utm_campaign=Badge_Grade_Settings)
+
 CronWeb是一个不依赖crontab的cron服务，并有一个与之对应的WebUI - [CronWeb-front](https://github.com/So0ni/cronweb-front)
 
 这个项目里已经带上CronWeb-front了，所以你不必再手动去编译(不过有可能自带的版本会忘记更新，能用就行)。
