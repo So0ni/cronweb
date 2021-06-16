@@ -57,11 +57,11 @@ async def main(path_config: typing.Optional[typing.Union[str, pathlib.Path]] = N
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='CronWeb操作工具')
-    parser.add_argument('command', type=str, help='启动CronWeb',
+    parser.add_argument('command', type=str, help='启动CronWeb', nargs='?',
                         choices=['run']
                         )
-    parser.add_argument('-c', '--config', dest='path_config', default=[None], nargs=1, help='指定配置文件路径')
+    parser.add_argument('-c', '--config', dest='path_config', default=None, nargs='?', help='指定配置文件路径')
     args = parser.parse_args()
 
     if args.command == 'run':
-        asyncio.run(main(args.path_config[0]))
+        asyncio.run(main(args.path_config))
