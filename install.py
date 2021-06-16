@@ -132,10 +132,10 @@ def generate_config_file(config: InfoConfig):
         'secret': secret, 'host': config.host, 'port': config.port,
         'db_path': db_path, 'log_dir': log_dir,
         'log_level': log_level, 'work_dir': work_dir,
-        'ssl_cert_reqs': f'ssl_cert_reqs: {2 if config.client_cert else 0}',
-        'ssl_certfile': f"ssl_certfile: '{config.ssl_certfile}'" if config.ssl_certfile else '',
-        'ssl_keyfile': f"ssl_keyfile: '{config.ssl_keyfile}'" if config.ssl_keyfile else '',
-        'ssl_ca_certs': f"ssl_ca_certs: '{config.ssl_ca_certs}'" if config.ssl_ca_certs else ''
+        'ssl_cert_reqs': 2 if config.client_cert else 0,
+        'ssl_certfile': config.ssl_certfile or '',
+        'ssl_keyfile': config.ssl_keyfile or '',
+        'ssl_ca_certs': config.ssl_ca_certs or ''
     })
     if not file_config.parent.exists():
         file_config.parent.mkdir(parents=True)

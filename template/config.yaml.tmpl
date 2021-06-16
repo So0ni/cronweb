@@ -5,10 +5,10 @@ web:
   uv_kwargs:
     use_colors: false
     timeout_keep_alive: 60
-    {ssl_cert_reqs}
-    {ssl_certfile}
-    {ssl_keyfile}
-    {ssl_ca_certs}
+    ssl_cert_reqs: {ssl_cert_reqs}
+    ssl_certfile: '{ssl_certfile}'
+    ssl_keyfile: '{ssl_keyfile}'
+    ssl_ca_certs: '{ssl_ca_certs}'
 
 storage:
   db_path: '{db_path}'
