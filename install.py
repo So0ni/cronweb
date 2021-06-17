@@ -47,7 +47,12 @@ class InfoConfig:
     ssl_keyfile: pathlib.Path = (PATH_PROJ_ROOT / "certs" / "server.key")
     ssl_certfile: pathlib.Path = (PATH_PROJ_ROOT / "certs" / "server.pem")
     ssl_ca_certs: pathlib.Path = (PATH_PROJ_ROOT / "certs" / "client_ca.pem")
+    ssl_ca_keyfile: pathlib.Path = (PATH_PROJ_ROOT / "certs" / "client_ca.key")
     dir_venv: pathlib.Path = (PATH_PROJ_ROOT / ".venv/")
+    path_config: pathlib.Path = (PATH_PROJ_ROOT / 'config.yaml')
+    path_config_tmpl: pathlib.Path = (PATH_PROJ_ROOT / 'template' / 'config.yaml.tmpl')
+    path_systemd_unit: pathlib.Path = (PATH_PROJ_ROOT / 'cronweb.service')
+    path_systemd_unit_tmpl: pathlib.Path = (PATH_PROJ_ROOT / 'template' / 'cronweb.service.tmpl')
 
     bin_python: typing.Optional[pathlib.Path] = None
 
@@ -134,14 +139,12 @@ def check_secure(config: InfoConfig):
 def generate_config_file(config: InfoConfig):
     print('从模板生成配置文件...')
 
-    file_tmpl_config = config.dir_project / 'template' / 'config.yaml.tmpl'
-    file_config = config.dir_project / 'config.yaml'
-    if file_config.exists():
+    if config.path_config.exists():
         if not yes_or_no('配置文件似乎已经存在，需要替换吗?: ', 'no', config=config):
             print('跳过配置文件替换')
             return None
 
-    with open(file_tmpl_config, 'r', encoding='utf8') as fp:
+    with open(config.path_config_tmpl, 'r', encoding='utf8') as fp:
         tmpl_config = fp.read()
     input_default('输入新的API密码',
                   default=config.secret,
@@ -193,10 +196,10 @@ def generate_config_file(config: InfoConfig):
         'ssl_keyfile': config.ssl_keyfile or '',
         'ssl_ca_certs': config.ssl_ca_certs or ''
     })
-    if not file_config.parent.exists():
-        file_config.parent.mkdir(parents=True)
+    if not config.path_config.parent.exists():
+        config.path_config.parent.mkdir(parents=True)
 
-    with open(file_config, 'w', encoding='utf8') as fp:
+    with open(config.path_config, 'w', encoding='utf8') as fp:
         fp.write(config_str)
 
     if config.client_cert:
@@ -346,8 +349,7 @@ def after_linux(config: InfoConfig):
 
     def generate_service_unit():
         print('生成systemd service文件')
-        file_tmpl_service = config.dir_project / 'template' / 'cronweb.service.tmpl'
-        with open(file_tmpl_service, 'r', encoding='utf8') as fp:
+        with open(config.path_systemd_unit_tmpl, 'r', encoding='utf8') as fp:
             tmpl_service = fp.read()
 
         input_default('输入用于运行CronWeb的用户的用户名(默认为当前用户): ',
@@ -357,9 +359,10 @@ def after_linux(config: InfoConfig):
         command = f'{config.bin_python.absolute()} {config.dir_project.absolute() / "manage.py"} run'
 
         service_str = tmpl_service.format(user=config.user_option, group=config.group_option,
-                                          exec=command, pwd=str(config.dir_project))
-        file_service = config.dir_project / 'cronweb.service'
-        with open(file_service, 'w', encoding='utf8') as fp:
+                                          exec=command, pwd=str(config.dir_project),
+                                          path_config=str(config.path_config))
+
+        with open(config.path_systemd_unit, 'w', encoding='utf8') as fp:
             fp.write(service_str)
 
         try:
@@ -415,8 +418,8 @@ def gen_user_cert(
     if not serial:
         print('你需要用-s指定一个客户端证书序号')
         sys.exit(3)
-    path_key = pathlib.Path(path_key) if path_key else (config.dir_project / 'certs' / 'client_ca.key')
-    path_cert = pathlib.Path(path_cert) if path_cert else (config.dir_project / 'certs' / 'client_ca.pem')
+    path_key = pathlib.Path(path_key) if path_key else config.ssl_ca_keyfile
+    path_cert = pathlib.Path(path_cert) if path_cert else config.ssl_ca_certs
     if not path_key.exists() or not path_cert.exists():
         raise FileNotFoundError('客户端CA证书私钥或公钥不存在')
 
@@ -469,7 +472,7 @@ def list_config_env(config: InfoConfig):
         env_name = get_env_name(key)
         env_value = os.environ.get(env_name)
         value = f'{"* " + env_value if env_value else "  " + str(getattr(config, key))}'
-        print(f'{env_name:-<25s} {value}')
+        print(f'{env_name:-<35s} {value}')
 
 
 if __name__ == '__main__':

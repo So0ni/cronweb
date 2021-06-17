@@ -7,7 +7,7 @@ User={user}
 WorkingDirectory={pwd}
 Restart=always
 Type=simple
-ExecStart={exec}
+ExecStart={exec} -c {path_config}
 
 [Install]
 WantedBy=multi-user.target
