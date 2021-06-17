@@ -28,7 +28,8 @@ class LoggerBase(abc.ABC):
             self._core.set_log_default(self)
 
     @abc.abstractmethod
-    def get_log_queue(self, uuid: str, shot_id: str) -> typing.Tuple[asyncio.queues.Queue, pathlib.Path]:
+    def get_log_queue(self, uuid: str, shot_id: str,
+                      timeout_log: float) -> typing.Tuple[asyncio.queues.Queue, pathlib.Path]:
         pass
 
     @abc.abstractmethod

@@ -140,9 +140,10 @@ class CronWeb:
         """停止trigger中的所有任务 但是并不从中删除(暂时不考虑写入数据库 用于停止后避免启动新进程)"""
         return self._trigger.stop_all()
 
-    def get_log_queue(self, uuid: str, shot_id: str) -> typing.Tuple[asyncio.queues.Queue, pathlib.Path]:
+    def get_log_queue(self, uuid: str, shot_id: str,
+                      timeout_log: float) -> typing.Tuple[asyncio.queues.Queue, pathlib.Path]:
         """获取对应uuid的日志queue实例 运行开始时间和结束时间由queue实例写入"""
-        return self._aiolog.get_log_queue(uuid, shot_id)
+        return self._aiolog.get_log_queue(uuid, shot_id, timeout_log)
 
     def stop_running_by_shot_id(self, shot_id: str) -> typing.Optional[str]:
         """通过shot_id结束正在运行的进程 返回shot_id None则为shot_id未运行"""

@@ -57,7 +57,7 @@ class AioSubprocessWorker(worker.WorkerBase):
             cwd=str(self._work_dir)
         )
         now = datetime.datetime.now()
-        queue, log_path = self._core.get_log_queue(uuid, shot_id)
+        queue, log_path = self._core.get_log_queue(uuid, shot_id, timeout)
         state_proc = worker.JobStateEnum.RUNNING
         job_state = worker.JobState(uuid, state_proc, shot_id, str(now))
         await self._core.set_job_running(log_path, job_state)
