@@ -22,31 +22,60 @@ except ModuleNotFoundError:
     print('需要已安装pip和venv')
     sys.exit(3)
 
+ENV_CONFIG_PREFIX = 'CW_CONFIG_'
+PATH_PROJ_ROOT = pathlib.Path(__file__).parent.absolute()
+
 
 @dataclasses.dataclass
 class InfoConfig:
     host: str = '127.0.0.1'
     port: int = 8000
-    client_cert: bool = False
+    client_cert: bool = True
     system: str = platform.system()
-    dir_project: pathlib.Path = pathlib.Path(__file__).parent.absolute()
+    dir_project: pathlib.Path = PATH_PROJ_ROOT
     conda_prefix: typing.Optional[pathlib.Path] = pathlib.Path(os.environ.get('CONDA_PREFIX')) if \
         os.environ.get('CONDA_PREFIX') else None
+    docker_mode: bool = pathlib.Path('/.dockerenv').exists()
+    log_dir: str = f'{PATH_PROJ_ROOT / "logs/"}'
+    secret: str = ''
+    db_path: str = f'{PATH_PROJ_ROOT / "logs.sqlite3"}'
+    log_level: str = 'DEBUG'
+    work_dir: str = f'{PATH_PROJ_ROOT / "scripts"}'
+    user_current: str = getpass.getuser()
+    user_option: str = 'cronweb'
+    group_option: str = 'cronweb'
+    ssl_keyfile: pathlib.Path = (PATH_PROJ_ROOT / "certs" / "server.key")
+    ssl_certfile: pathlib.Path = (PATH_PROJ_ROOT / "certs" / "server.pem")
+    ssl_ca_certs: pathlib.Path = (PATH_PROJ_ROOT / "certs" / "client_ca.pem")
+    dir_venv: pathlib.Path = (PATH_PROJ_ROOT / ".venv/")
 
-    user_current: typing.Optional[str] = None
-    user_option: typing.Optional[str] = None
-    group_option: typing.Optional[str] = None
-    ssl_keyfile: typing.Optional[pathlib.Path] = None
-    ssl_certfile: typing.Optional[pathlib.Path] = None
-    ssl_ca_certs: typing.Optional[pathlib.Path] = None
-    dir_venv: typing.Optional[pathlib.Path] = None
     bin_python: typing.Optional[pathlib.Path] = None
 
 
-def yes_or_no(prompt: str, default_choice: str) -> bool:
+def get_env_name(target: str) -> str:
+    return f'{ENV_CONFIG_PREFIX}{target.upper()}'
+
+
+def set_config_from_env(config: InfoConfig) -> None:
+    type_hints = typing.get_type_hints(config)
+    for attr in config.__dict__.keys():
+        value_origin = getattr(config, attr)
+        env_name = get_env_name(attr)
+        if isinstance(type_hints[attr], typing._GenericAlias):
+            var_type = type_hints[attr].__args__[0]
+        else:
+            var_type = type_hints[attr]
+        value = os.environ.get(env_name, None)
+        setattr(config, attr, var_type(value) if value is not None else value_origin)
+
+
+def yes_or_no(prompt: str, default_choice: str,
+              config: typing.Optional[InfoConfig] = None) -> bool:
     """yes总是True  no总是False"""
     assert default_choice in {'yes', 'no'}
     default_value = True if default_choice == 'yes' else False
+    if config is not None and config.docker_mode is True:
+        return default_value
     hint_choice = ('([yes], no) ' if default_value else '([no], yes) ')
     prompt = f'{prompt} {hint_choice}'
     while True:
@@ -61,9 +90,23 @@ def yes_or_no(prompt: str, default_choice: str) -> bool:
 T = typing.TypeVar('T')
 
 
-def input_default(prompt: str, default: T, return_type: typing.Type[T] = str) -> T:
-    string_input = input(prompt).strip() or default
-    return return_type(string_input)
+def input_default(prompt: str, default: T, return_type: typing.Type[T] = str,
+                  config: typing.Optional[InfoConfig] = None,
+                  target: typing.Optional[str] = None) -> T:
+    if config is not None:
+        if not hasattr(config, target):
+            raise AttributeError(f'{type(config).__name__} object has no attribute {target}')
+        if config.docker_mode is True:
+            if getattr(config, target) is not None:
+                return getattr(config, target)
+            setattr(config, target, default)
+            return default
+    hint_default = f'[{default}]' if default else ''
+    string_input = input(f'{prompt}{hint_default}: ').strip() or default
+    value: T = return_type(string_input)
+    if config is not None:
+        setattr(config, target, value)
+    return value
 
 
 def risk_tips() -> None:
@@ -78,7 +121,7 @@ def risk_tips() -> None:
 def check_secure(config: InfoConfig):
     print('检查安全性...')
     config.user_current = getpass.getuser()
-    if config.system == 'Linux' and pathlib.Path('/.dockerenv').exists():
+    if config.system == 'Linux' and config.docker_mode:
         print('你似乎处于Docker环境中，但是你仍然需要针对Docker进行一些设置以提高安全性')
         return None
     if config.user_current == 'root' or config.user_current == 'Administrator':
@@ -94,44 +137,57 @@ def generate_config_file(config: InfoConfig):
     file_tmpl_config = config.dir_project / 'template' / 'config.yaml.tmpl'
     file_config = config.dir_project / 'config.yaml'
     if file_config.exists():
-        if not yes_or_no('配置文件似乎已经存在，需要替换吗?: ', default_choice='no'):
+        if not yes_or_no('配置文件似乎已经存在，需要替换吗?: ', 'no', config=config):
             print('跳过配置文件替换')
             return None
 
     with open(file_tmpl_config, 'r', encoding='utf8') as fp:
         tmpl_config = fp.read()
-    secret = input_default('输入新的API密码: ', default='')
-    config.host = input_default(f'输入API监听主机地址(建议留空为默认{config.host}): ', default=config.host)
-    config.port = input_default(f'输入API监听主机端口(建议留空为默认{config.port}): ', default=config.port,
-                                return_type=int)
-    db_path = input_default('输入数据库文件存放路径(留空为默认项目目录下的logs.sqlite3文件): ',
-                            default=f'{config.dir_project / "logs.sqlite3"}')
-    log_dir = input_default('输入子进程日志文件存放路径(留空为默认项目目录下的logs目录): ',
-                            default=f'{config.dir_project / "logs"}')
-    log_level = input_default('输入CronWeb日志等级(留空为默认DEBUG): ', default='DEBUG')
-    work_dir = input_default('输入任务的工作目录(留空为默认项目目录下scripts目录): ',
-                             default=f'{config.dir_project / "scripts"}')
+    input_default('输入新的API密码',
+                  default=config.secret,
+                  config=config, target='secret')
+    input_default(f'输入API监听主机地址',
+                  default=config.host,
+                  config=config, target='host')
+    input_default(f'输入API监听主机端口',
+                  default=config.port,
+                  return_type=int, config=config, target='port')
+    input_default('输入数据库文件存放路径',
+                  default=config.db_path,
+                  config=config, target='db_path')
+    input_default('输入子进程日志文件存放路径',
+                  default=config.log_dir,
+                  config=config, target='log_dir')
+    input_default('输入CronWeb日志等级',
+                  default=config.log_level,
+                  config=config, target='log_level')
+    input_default('输入任务的工作目录',
+                  default=config.work_dir,
+                  config=config, target='work_dir')
 
-    if yes_or_no('启用客户端证书验证吗?', 'yes'):
+    if yes_or_no('启用客户端证书验证吗?', 'yes', config=config):
         config.client_cert = True
         print('启用客户端证书验证')
-        config.ssl_certfile = input_default('输入服务端证书路径(留空为默认自动生成): ',
-                                            default=config.dir_project / "certs" / "server.pem",
-                                            return_type=pathlib.Path)
-        config.ssl_keyfile = input_default('输入服务端证书私钥路径(留空为默认自动生成): ',
-                                           default=config.dir_project / "certs" / "server.key",
-                                           return_type=pathlib.Path)
-        config.ssl_ca_certs = input_default('输入客户端CA证书路径(留空为默认自动生成): ',
-                                            default=config.dir_project / "certs" / "client_ca.pem",
-                                            return_type=pathlib.Path)
+        input_default('输入服务端证书路径',
+                      default=config.ssl_certfile,
+                      return_type=pathlib.Path,
+                      config=config, target='ssl_certfile')
+        input_default('输入服务端证书私钥路径',
+                      default=config.ssl_keyfile,
+                      return_type=pathlib.Path,
+                      config=config, target='ssl_keyfile')
+        input_default('输入客户端CA证书路径',
+                      default=config.ssl_ca_certs,
+                      return_type=pathlib.Path,
+                      config=config, target='ssl_ca_certs')
     else:
         config.client_cert = False
         print('禁用客户端证书验证，你需要确保WebAPI不会被非法访问')
 
     config_str = tmpl_config.format(**{
-        'secret': secret, 'host': config.host, 'port': config.port,
-        'db_path': db_path, 'log_dir': log_dir,
-        'log_level': log_level, 'work_dir': work_dir,
+        'secret': config.secret, 'host': config.host, 'port': config.port,
+        'db_path': config.db_path, 'log_dir': config.log_dir,
+        'log_level': config.log_level, 'work_dir': config.work_dir,
         'ssl_cert_reqs': 2 if config.client_cert else 0,
         'ssl_certfile': config.ssl_certfile or '',
         'ssl_keyfile': config.ssl_keyfile or '',
@@ -158,7 +214,7 @@ def create_certs(config: InfoConfig):
     file_ca_key = file_ca.parent / 'client_ca.key'
 
     if not file_cert.exists():
-        if yes_or_no('服务端证书不存在，要生成吗?', 'yes'):
+        if yes_or_no('服务端证书不存在，要生成吗?', 'yes', config=config):
             print('生成自签名服务端证书')
             if not file_cert.parent.exists():
                 file_cert.parent.mkdir(parents=True)
@@ -179,7 +235,7 @@ def create_certs(config: InfoConfig):
     print('服务器证书私钥和客户端CA证书私钥是绝密的，无论如何都不要泄露')
 
     if not file_ca.exists():
-        if yes_or_no('客户端CA证书不存在，要生成吗?', 'yes'):
+        if yes_or_no('客户端CA证书不存在，要生成吗?', 'yes', config=config):
             print('生成客户端CA证书')
             if not file_ca.parent.exists():
                 file_ca.parent.mkdir(parents=True)
@@ -200,7 +256,6 @@ def create_certs(config: InfoConfig):
 
 def create_venv(config: InfoConfig):
     print('生成虚拟环境...')
-    config.dir_venv = config.dir_project / '.venv'
     if config.system == 'Windows':
         config.bin_python = config.dir_venv / 'Scripts' / 'python.exe'
     else:
@@ -225,7 +280,7 @@ def generate_env_subprocess(config: InfoConfig):
     print('生成运行环境配置文件...')
     path_env_file = config.dir_project / '.env_subprocess.json'
     if path_env_file.exists():
-        if not yes_or_no('环境文件似乎已经存在，需要替换吗?', 'no'):
+        if not yes_or_no('环境文件似乎已经存在，需要替换吗?', 'no', config=config):
             print('跳过环境文件替换')
             return None
 
@@ -236,6 +291,10 @@ def generate_env_subprocess(config: InfoConfig):
         env_source['PATH'] = f"{config.bin_python.parent};{env_source['PATH']}"
     else:
         env_source['PATH'] = f"{config.bin_python.parent}:{env_source['PATH']}"
+
+    for key in tuple(env_source.keys()):
+        if key.startswith(ENV_CONFIG_PREFIX):
+            env_source.pop(key)
 
     with open(path_env_file, 'w', encoding='utf8') as fp:
         json.dump(env_source, fp, ensure_ascii=False, indent=4)
@@ -291,7 +350,9 @@ def after_linux(config: InfoConfig):
         with open(file_tmpl_service, 'r', encoding='utf8') as fp:
             tmpl_service = fp.read()
 
-        config.user_option = input_default('输入用于运行CronWeb的用户的用户名(默认为当前用户): ', default=getpass.getuser())
+        input_default('输入用于运行CronWeb的用户的用户名(默认为当前用户): ',
+                      default=config.user_option,
+                      config=config, target='user_option')
         config.group_option = config.user_option
         command = f'{config.bin_python.absolute()} {config.dir_project.absolute() / "manage.py"} run'
 
@@ -305,7 +366,7 @@ def after_linux(config: InfoConfig):
             import pwd
             pwd.getpwnam(config.user_option)
         except KeyError:
-            if yes_or_no(f'用户{config.user_option}不存在，你想要创建吗?你需要有对应的sudo权限: ', 'yes'):
+            if yes_or_no(f'用户{config.user_option}不存在，你想要创建吗?你需要有对应的sudo权限: ', 'yes', config=config):
                 os.system(f'sudo useradd {config.user_option}')
                 current_group = config.user_current
                 os.system(f'sudo usermod -a -G {current_group} {config.user_option}')
@@ -402,13 +463,25 @@ def gen_user_cert(
     print('客户端证书生成完成，请保护好生成的客户端证书')
 
 
+def list_config_env(config: InfoConfig):
+    print('[*] 在环境变量中配置过的值')
+    for key in config.__dict__.keys():
+        env_name = get_env_name(key)
+        env_value = os.environ.get(env_name)
+        value = f'{"* " + env_value if env_value else "  " + str(getattr(config, key))}'
+        print(f'{env_name:-<25s} {value}')
+
+
 if __name__ == '__main__':
     info_config = InfoConfig()
 
     parser = argparse.ArgumentParser(description='CronWeb安装工具')
-    parser.add_argument('command', nargs='?', type=str, help='生成服务证书',
-                        choices=['gen-user']
+    parser.add_argument('command', nargs='?', type=str,
+                        help='gen-user: 生成服务证书 list-config-env: 列出可配置环境变量',
+                        choices=['gen-user', 'list-config-env']
                         )
+    parser.add_argument('--config-from-env', action='store_true', help='从环境变量中读取配置(而不是prompt询问)')
+    parser.add_argument('--docker-mode', action='store_true', help='所有的yes or no自动选择默认选项(用于docker)')
     parser.add_argument('-s', '--serial', nargs='?', type=str, default=None,
                         help='指定生成的客户端证书序号')
     parser.add_argument('-k', '--ca-key', nargs='?', type=str,
@@ -418,9 +491,14 @@ if __name__ == '__main__':
                         default=None,
                         help='客户端CA证书私钥路径(默认为cert/client_ca.key)')
     args = parser.parse_args()
-    print(args)
 
     if args.command is None:
+        if args.docker_mode is True:
+            info_config.docker_mode = True
+        if args.config_from_env is True:
+            set_config_from_env(info_config)
         route(info_config)
     elif args.command == 'gen-user':
         gen_user_cert(args.ca_key, args.ca_cert, args.serial, info_config)
+    elif args.command == 'list-config-env':
+        list_config_env(info_config)

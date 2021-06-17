@@ -22,14 +22,12 @@ CronWeb是一个不依赖crontab的cron服务，并有一个与之对应的WebUI
 
 2. 千万不要执行非可信代码和程序(这点和crontab一样)
 
-3. 如果要将WebAPI暴露到非本机地址，最好使用客户端证书认证，
-   不要依赖自带密码(CronWeb自带的客户端证书认证和反向代理服务器的客户端证书认证并不冲突，
-   并且建议同时开启)
-   
+3. 如果要将WebAPI暴露到非本机地址，最好使用客户端证书认证， 不要依赖自带密码(CronWeb自带的客户端证书认证和反向代理服务器的客户端证书认证并不冲突， 并且建议同时开启)
+
 4. ~即使只监听本地回环，本机其它账户仍然可以通过回环地址访问到WebAPI，~
    ~所以请不要在可能有非可信人员访问到哪怕另外账户的服务器或计算机上部署~
    尽可能开启客户端证书认证，以解决监听本地回环时来自本地的WebAPI非法访问
-   
+
 5. 确保被执行的代码不会被非法修改，CronWeb的配置文件和证书目录不会被其它账户访问
 
 这个服务具有几个安全薄弱环节(或者更多)，使用时请仔细斟酌安全性：
@@ -37,7 +35,6 @@ CronWeb是一个不依赖crontab的cron服务，并有一个与之对应的WebUI
 1. 关键WebAPI虽然要求认证，但是为静态密码，且无尝试次数限制(密码甚至在配置文件中都是明文)
 
 2. 并未隔离被执行的代码，执行非可信代码可能会造成严重的安全问题
-
 
 ## Installation
 
@@ -55,8 +52,7 @@ python install.py
 
 1. 生成配置文件 `config.yaml`
 
-2. 如果选择开启客户端证书认证，且本地环境已安装openssl，
-   则在项目下的`certs/`目录生成服务端证书和客户端CA证书
+2. 如果选择开启客户端证书认证，且本地环境已安装openssl， 则在项目下的`certs/`目录生成服务端证书和客户端CA证书
 
 3. 在项目的 `.venv` 目录生成虚拟环境
 
@@ -77,16 +73,50 @@ python install.py
 
 4. 检查`cronweb.service`文件的路径正确性，并将其复制到systemd的目录中，重载systemd
 
-5. 对于非Linux用户例如Windows、MacOS用户，
-   你需要寻找工具将启动命令封装成服务
+5. 对于非Linux用户例如Windows、MacOS用户， 你需要寻找工具将启动命令封装成服务
+
+#### 环境变量配置和静默安装
+
+`install.py` 脚本提供从环境变量读取配置和静默安装的功能。
+
+```bash
+python install.py --config-from-env --docker-mode
+```
+
+使用 `python install.py list-config-env` 列出可配置环境变量和已配置环境变量，输出如下:
+
+```
+ > python install.py list-config-env
+ 
+[*] 在环境变量中配置过的值
+CW_CONFIG_HOST-----------   127.0.0.1
+CW_CONFIG_PORT-----------   8000
+CW_CONFIG_CLIENT_CERT----   True
+CW_CONFIG_SYSTEM---------   Linux
+CW_CONFIG_DIR_PROJECT----   ~\cronweb
+CW_CONFIG_CONDA_PREFIX---   None
+CW_CONFIG_DOCKER_MODE----   False
+CW_CONFIG_LOG_DIR--------   ~\cronweb\logs
+CW_CONFIG_SECRET--------- * 123456
+CW_CONFIG_DB_PATH--------   ~\cronweb\logs.sqlite3
+CW_CONFIG_LOG_LEVEL------ * DEBUG
+CW_CONFIG_WORK_DIR-------   ~\cronweb\scripts
+CW_CONFIG_USER_CURRENT---   fake_user
+CW_CONFIG_USER_OPTION----   cronweb
+CW_CONFIG_GROUP_OPTION---   cronweb
+CW_CONFIG_SSL_KEYFILE----   ~\cronweb\certs\server.key
+CW_CONFIG_SSL_CERTFILE---   ~\cronweb\certs\server.pem
+CW_CONFIG_SSL_CA_CERTS---   ~\cronweb\certs\client_ca.pem
+CW_CONFIG_DIR_VENV-------   ~\cronweb\.venv
+CW_CONFIG_BIN_PYTHON-----   None
+```
 
 ### 手动
 
 手动操作的话，对于半自动安装，除了手动操作部分之外，你还需要：
 
-1. 将template目录下的配置文件模板复制到项目目录下，
-并手动修改里面的参数值，最后将文件名修改为config.yaml或cronweb.service
-   
+1. 将template目录下的配置文件模板复制到项目目录下， 并手动修改里面的参数值，最后将文件名修改为config.yaml或cronweb.service
+
 2. 创建一个名为.env_subprocess.json的文件，包含subprocess运行时的环境变量
 
 3. 为你的Python环境安装依赖包
@@ -128,6 +158,7 @@ sudo systemctl start cronweb
 # 激活虚拟环境(如果有的话)
 python manage.py run
 ```
+
 ## Todo
 
 - 错误重试
@@ -140,19 +171,15 @@ python manage.py run
 
 ## License
 
-CronWeb and CronWeb-front
-Copyright (C) 2021. Sonic Young.
+CronWeb and CronWeb-front Copyright (C) 2021. Sonic Young.
 
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
+This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public
+License as published by the Free Software Foundation, either version 3 of the License, or
 (at your option) any later version.
 
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
+This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied
+warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License
-along with this program.  If not, see <https://www.gnu.org/licenses/>.
+You should have received a copy of the GNU General Public License along with this program. If not,
+see <https://www.gnu.org/licenses/>.
 
