@@ -40,7 +40,7 @@ def load_config(path_config: typing.Optional[typing.Union[str, pathlib.Path]] = 
 async def init(config: typing.Dict[str, typing.Any]) -> cronweb.CronWeb:
     logging.config.dictConfig(config['pylogger'])
 
-    core = cronweb.CronWeb()
+    core = cronweb.CronWeb(**config['core'])
     logger_core = logger.logger_aio.AioLogger(controller=core, **config['logger'])
     trigger_core = trigger.trigger_aiocron.TriggerAioCron(controller=core)
     web_core = web.web_fastapi.WebFastAPI(controller=core, **config['web'])

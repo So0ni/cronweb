@@ -26,6 +26,7 @@ else:
 
 class CronWeb:
     def __init__(self,
+                 log_expire_days: typing.Optional[int] = None,
                  dir_project: typing.Optional[typing.Union[str, pathlib.Path]] = None,
                  worker_instance: typing.Optional[worker.WorkerBase] = None,
                  storage_instance: typing.Optional[storage.StorageBase] = None,
@@ -42,6 +43,7 @@ class CronWeb:
         self._py_logger: logging.Logger = logging.getLogger(f'cronweb.{self.__class__.__name__}')
         self._loop: asyncio.AbstractEventLoop = asyncio.get_event_loop()
         self._log_check_handle: typing.Optional[asyncio.TimerHandle] = None
+        self._log_expire_days = log_expire_days or 30
 
         self.dir_project = pathlib.Path(dir_project).absolute() if dir_project else \
             pathlib.Path(__file__).parent.parent.absolute()
@@ -269,7 +271,7 @@ class CronWeb:
                     self._py_logger.exception(e)
         self._py_logger.info('清理掉%s个记录已标记为删除的日志文件', count)
 
-    async def log_expire_check(self, expire_days: int = 30):
+    async def log_expire_check(self, expire_days: int):
         """检查数据库中所有日志记录 将过期log设置为deleted"""
         records = await self._storage.job_logs_get_all()
         now = datetime.datetime.now()
@@ -291,15 +293,15 @@ class CronWeb:
         next_date = datetime.datetime(now.year, now.month, now.day, 3, 9, 4) + datetime.timedelta(days=1)
         return self._loop.time() + (next_date.timestamp() - time.time())
 
-    def _timing_check(self):
+    def _timing_check(self, log_expire_days: int):
         if self._log_check_handle is not None:
             self._log_check_handle.cancel()
         self._log_check_handle = self._loop.call_at(self._timing_log_check_next(), self._timing_check)
         self._py_logger.info('日志定时一致性检查启动')
-        asyncio.ensure_future(self._timing_check_func())
+        asyncio.ensure_future(self._timing_check_func(log_expire_days))
 
-    async def _timing_check_func(self):
-        await self.log_expire_check(30)
+    async def _timing_check_func(self, log_expire_days):
+        await self.log_expire_check(log_expire_days)
         await self.log_check()
 
     async def stop(self):
@@ -318,7 +320,7 @@ class CronWeb:
                   port: typing.Optional[int] = None, **kwargs):
         self._py_logger.info('启动fastAPI')
         self._web.on_shutdown(self.stop)
-        self._timing_check()
+        self._timing_check(self._log_expire_days)
         await self.log_check()
         await self.job_check()
         await self._web.start_server(host, port, **kwargs)
