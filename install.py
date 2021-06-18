@@ -48,11 +48,17 @@ class InfoConfig:
     ssl_certfile: pathlib.Path = (PATH_PROJ_ROOT / "certs" / "server.pem")
     ssl_ca_certs: pathlib.Path = (PATH_PROJ_ROOT / "certs" / "client_ca.pem")
     ssl_ca_keyfile: pathlib.Path = (PATH_PROJ_ROOT / "certs" / "client_ca.key")
+    client_nginx_certs: pathlib.Path = (PATH_PROJ_ROOT / "certs" / "client_nginx.pem")
+    client_nginx_key: pathlib.Path = (PATH_PROJ_ROOT / "certs" / "client_nginx.key")
     dir_venv: pathlib.Path = (PATH_PROJ_ROOT / ".venv/")
     path_config: pathlib.Path = (PATH_PROJ_ROOT / 'config.yaml')
     path_config_tmpl: pathlib.Path = (PATH_PROJ_ROOT / 'template' / 'config.yaml.tmpl')
     path_systemd_unit: pathlib.Path = (PATH_PROJ_ROOT / 'cronweb.service')
     path_systemd_unit_tmpl: pathlib.Path = (PATH_PROJ_ROOT / 'template' / 'cronweb.service.tmpl')
+    path_nginx_conf_tmpl: pathlib.Path = (PATH_PROJ_ROOT / 'template' / 'cronweb_nginx.conf.tmpl')
+    path_nginx_conf: pathlib.Path = (PATH_PROJ_ROOT / 'cronweb_nginx.conf')
+    dir_client_cert_gen: pathlib.Path = (PATH_PROJ_ROOT / 'dist')
+    password_pfx: str = ''
 
     bin_python: typing.Optional[pathlib.Path] = None
 
@@ -99,12 +105,13 @@ def input_default(prompt: str, default: T, return_type: typing.Type[T] = str,
                   config: typing.Optional[InfoConfig] = None,
                   target: typing.Optional[str] = None) -> T:
     if config is not None:
-        if not hasattr(config, target):
+        if target and not hasattr(config, target):
             raise AttributeError(f'{type(config).__name__} object has no attribute {target}')
         if config.docker_mode is True:
-            if getattr(config, target) is not None:
-                return getattr(config, target)
-            setattr(config, target, default)
+            if target:
+                if getattr(config, target) is not None:
+                    return getattr(config, target)
+                setattr(config, target, default)
             return default
     hint_default = f'[{default}]' if default else ''
     string_input = input(f'{prompt}{hint_default}: ').strip() or default
@@ -345,14 +352,59 @@ def after_linux(config: InfoConfig):
         out = subprocess.check_output(['ps', '--no-headers', '-o', 'comm', '1']).decode().strip()
         if 'systemd' not in out:
             print('当前系统并未使用systemd，不需要生成service文件')
-            sys.exit(3)
+            return False
+        else:
+            return True
+
+    def generate_nginx_conf():
+        try:
+            subprocess.check_call(['nginx', '-v'])
+        except FileNotFoundError:
+            print('当前系统并未安装nginx，不需要生成service文件')
+            return None
+        print('生成nginx配置文件')
+        with open(config.path_nginx_conf_tmpl, 'r', encoding='utf8') as fp:
+            tmpl_nginx = fp.read()
+        input_default('输入nginx的反代地址',
+                      default=config.host,
+                      config=config, target='host')
+        input_default('输入nginx的反代端口',
+                      default=config.port,
+                      config=config, target='port')
+        input_default('输入nginx的服务端证书路径',
+                      default=config.ssl_certfile,
+                      config=config, target='ssl_certfile')
+        input_default('输入nginx的服务端证书私钥路径',
+                      default=config.ssl_keyfile,
+                      config=config, target='ssl_keyfile')
+        input_default('输入nginx的客户端认证CA证书路径',
+                      default=config.ssl_ca_certs,
+                      config=config, target='ssl_ca_certs')
+        input_default('输入nginx的客户端认证CA证书路径',
+                      default=config.ssl_ca_certs,
+                      config=config, target='ssl_ca_certs')
+        client_nginx_cert = input_default('输入CronWeb的客户端证书路径',
+                                          default=config.ssl_ca_certs.parent / 'client_nginx.pem',
+                                          config=config)
+        client_nginx_key = input_default('输入CronWeb的客户端证书私钥路径',
+                                         default=config.ssl_ca_certs.parent / 'client_nginx.key',
+                                         config=config)
+        conf_nginx = tmpl_nginx.format(
+            ssl_certfile=config.ssl_certfile, ssl_keyfile=config.ssl_keyfile,
+            ssl_ca_certs=config.ssl_ca_certs, port=config.port, host=config.host,
+            client_nginx_cert=client_nginx_cert, client_nginx_key=client_nginx_key
+        )
+        with open(config.path_nginx_conf, 'w', encoding='utf8') as fp:
+            fp.write(conf_nginx)
 
     def generate_service_unit():
+        if not check_systemd():
+            return None
         print('生成systemd service文件')
         with open(config.path_systemd_unit_tmpl, 'r', encoding='utf8') as fp:
             tmpl_service = fp.read()
 
-        input_default('输入用于运行CronWeb的用户的用户名(默认为当前用户): ',
+        input_default('输入用于运行CronWeb的用户的用户名',
                       default=config.user_option,
                       config=config, target='user_option')
         config.group_option = config.user_option
@@ -378,8 +430,8 @@ def after_linux(config: InfoConfig):
             pass
         print('你需要手动把service文件复制到systemd的目录中，并重载systemd')
 
-    check_systemd()
     generate_service_unit()
+    generate_nginx_conf()
 
 
 def after_windows(config: InfoConfig):
@@ -412,12 +464,18 @@ def route(config: InfoConfig):
 def gen_user_cert(
         path_key: typing.Optional[typing.Union[str, pathlib.Path]],
         path_cert: typing.Optional[typing.Union[str, pathlib.Path]],
-        serial: str,
-        config: InfoConfig
+        serial: typing.Optional[str],
+        config: InfoConfig,
+        for_nginx: bool = False
 ):
-    if not serial:
+    if not serial and not for_nginx:
         print('你需要用-s指定一个客户端证书序号')
         sys.exit(3)
+    if for_nginx:
+        print('生成nginx专用的客户端证书')
+        if serial:
+            print('为nginx生成的客户端证书不需要指定证书序列 直接为999')
+        serial = '999'
     path_key = pathlib.Path(path_key) if path_key else config.ssl_ca_keyfile
     path_cert = pathlib.Path(path_cert) if path_cert else config.ssl_ca_certs
     if not path_key.exists() or not path_cert.exists():
@@ -427,10 +485,16 @@ def gen_user_cert(
         print('似乎没有安装openssl，你可能需要手动生成客户端证书')
         return None
 
-    path_user_cert = config.dir_project / 'dist' / f'client_{serial}.pem'
-    path_user_key = config.dir_project / 'dist' / f'client_{serial}.key'
-    path_user_csr = config.dir_project / 'dist' / f'client_{serial}.csr'
-    path_user_pfx = config.dir_project / 'dist' / f'client_{serial}.pfx'
+    if not for_nginx:
+        path_user_cert = config.dir_client_cert_gen / f'client_{serial}.pem'
+        path_user_key = config.dir_client_cert_gen / f'client_{serial}.key'
+        path_user_csr = config.dir_client_cert_gen / f'client_{serial}.csr'
+        path_user_pfx = config.dir_client_cert_gen / f'client_{serial}.pfx'
+    else:
+        path_user_cert = config.ssl_ca_certs.parent / f'client_nginx.pem'
+        path_user_key = config.ssl_ca_certs.parent / f'client_nginx.key'
+        path_user_csr = config.ssl_ca_certs.parent / f'client_nginx.csr'
+        path_user_pfx = config.ssl_ca_certs.parent / f'client_nginx.pfx'
 
     if not path_user_cert.parent.exists():
         path_user_cert.parent.mkdir(parents=True)
@@ -455,12 +519,12 @@ def gen_user_cert(
     ])
 
     print('生成pfx证书')
-    password = input('输入pfx证书密码(不建议留空): ').strip()
+    input_default('输入pfx证书密码', config.password_pfx, str, config, target='password_pfx')
     subprocess.check_call([
         'openssl', 'pkcs12', '-export',
         '-out', str(path_user_pfx), '-inkey', str(path_user_key),
         '-in', str(path_user_cert), '-certfile', str(path_cert),
-        '-password', f'pass:{password}'
+        '-password', f'pass:{config.password_pfx}'
     ])
 
     print('客户端证书生成完成，请保护好生成的客户端证书')
@@ -487,6 +551,7 @@ if __name__ == '__main__':
     parser.add_argument('--docker-mode', action='store_true', help='所有的yes or no自动选择默认选项(用于docker)')
     parser.add_argument('-s', '--serial', nargs='?', type=str, default=None,
                         help='指定生成的客户端证书序号')
+    parser.add_argument('--for-nginx', action='store_true', help='生成nginx的客户端证书')
     parser.add_argument('-k', '--ca-key', nargs='?', type=str,
                         default=None,
                         help='客户端CA证书公钥路径(默认为certs/client_ca.pem)')
@@ -495,13 +560,14 @@ if __name__ == '__main__':
                         help='客户端CA证书私钥路径(默认为cert/client_ca.key)')
     args = parser.parse_args()
 
+    if args.config_from_env is True:
+        set_config_from_env(info_config)
+    if args.docker_mode is True:
+        info_config.docker_mode = True
+
     if args.command is None:
-        if args.docker_mode is True:
-            info_config.docker_mode = True
-        if args.config_from_env is True:
-            set_config_from_env(info_config)
         route(info_config)
     elif args.command == 'gen-user':
-        gen_user_cert(args.ca_key, args.ca_cert, args.serial, info_config)
+        gen_user_cert(args.ca_key, args.ca_cert, args.serial, info_config, args.for_nginx)
     elif args.command == 'list-config-env':
         list_config_env(info_config)
