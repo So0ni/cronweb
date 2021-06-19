@@ -102,24 +102,30 @@ class AioSubprocessWorker(worker.WorkerBase):
         self._py_logger.info('%s个正在运行的任务', len(running))
         return running
 
-    def kill_all_running_jobs(self) -> typing.Dict[str, str]:
+    async def kill_all_running_jobs(self) -> typing.Dict[str, str]:
         """关闭所有正在运行的任务 返回关闭成功的"""
         self._py_logger.info('停止worker中所有正在运行任务')
         success_dict = {}
         for key, job in self._running_jobs.items():
             try:
-                job[1].kill()
+                await self.kill_by_shot_id(key)
                 success_dict[key] = job[0]
-            except Exception:
-                pass
+            except Exception as e:
+                self._py_logger.exception(e)
         self._py_logger.info('已停止%s个正在运行的任务', len(success_dict))
         return success_dict
 
-    def kill_by_shot_id(self, shot_id: str) -> typing.Optional[str]:
+    async def kill_by_shot_id(self, shot_id: str) -> typing.Optional[str]:
         self._py_logger.info('停止worker中正在运行任务 shot_id:%s', shot_id)
         if shot_id not in self:
             return None
-        self._running_jobs[shot_id][1].kill()
+        job = self._running_jobs[shot_id]
+        job[1].terminate()
+        try:
+            await asyncio.wait_for(job[1].wait(), timeout=5)
+        except asyncio.TimeoutError:
+            self._py_logger.warning('子进程正常中止超时 尝试强制停止')
+            job[1].kill()
         return shot_id
 
     def __contains__(self, shot_id: str) -> bool:

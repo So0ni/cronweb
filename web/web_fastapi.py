@@ -177,7 +177,7 @@ class WebFastAPI(web.WebBase):
 
         @self.app.delete('/api/running_jobs/{shot_id}', dependencies=[fastapi.Depends(check_auth)])
         async def stop_running_by_shot_id(shot_id: str):
-            result = self._core.stop_running_by_shot_id(shot_id)
+            result = await self._core.stop_running_by_shot_id(shot_id)
             if not result:
                 return {'response': '任务未在运行或已运行结束', 'code': 0}
             return {'response': '成功停止运行', 'code': 0}
