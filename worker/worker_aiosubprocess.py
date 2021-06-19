@@ -20,6 +20,7 @@ class AioSubprocessWorker(worker.WorkerBase):
         self._env: typing.Optional[typing.Dict[str, str]] = None
         self._scripts_dir: typing.Optional[typing.Union[str, pathlib.Path]] = None
         self._work_dir = pathlib.Path(work_dir).absolute() if work_dir else None
+        self._killed_shot_id: typing.Set[str] = set()
         if self._work_dir is not None and not self._work_dir.exists():
             self._work_dir.mkdir(parents=True)
 
@@ -72,18 +73,26 @@ class AioSubprocessWorker(worker.WorkerBase):
                     # test?进程运行结束时自动关闭管道并发送EOF？如果不是wait会导致可能的死锁
                     exit_code = await proc.wait()
                     await queue.put(f'\n#### OUTPUT END ####\n\nExit Code: {exit_code}')
-                    await queue.put(logger.LogStop)
                     if exit_code == 0:
                         state_proc = worker.JobStateEnum.DONE
                         self._py_logger.debug('任务完成 shot_id:%s', shot_id)
+                        await queue.put(f'\nJob DONE')
+                    elif shot_id in self._killed_shot_id:
+                        self._killed_shot_id.remove(shot_id)
+                        state_proc = worker.JobStateEnum.KILLED
+                        self._py_logger.debug('手动停止 ExitCode:%s shot_id:%s', exit_code, shot_id)
+                        await queue.put(f'\nJob KILLED')
                     else:
                         state_proc = worker.JobStateEnum.ERROR
                         self._py_logger.debug('任务失败 ExitCode:%s shot_id:%s', exit_code, shot_id)
+                        await queue.put(f'\nJob FAILED')
+                    # 停止日志记录
+                    await queue.put(logger.LogStop)
                     break
-                await queue.put(line.decode(default_encoding))
+                await queue.put(f'{line.decode(default_encoding).rstrip()}\n')
             except asyncio.TimeoutError:
                 self._py_logger.error('等待stdout %ss超时 shot_id:%s', timeout, shot_id)
-                await queue.put(f'\n#### OUTPUT END ####\n\nKilled Timeout {timeout}s')
+                await queue.put(f'\n#### OUTPUT END ####\n\nKilled Timeout {timeout}s\nJob TIMEOUT')
                 await queue.put(logger.LogStop)
                 proc.kill()
                 self._py_logger.error('任务超时 killed shot_id:%s', shot_id)
@@ -120,6 +129,7 @@ class AioSubprocessWorker(worker.WorkerBase):
         if shot_id not in self:
             return None
         job = self._running_jobs[shot_id]
+        self._killed_shot_id.add(shot_id)
         job[1].terminate()
         try:
             await asyncio.wait_for(job[1].wait(), timeout=5)
