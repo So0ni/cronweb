@@ -37,7 +37,9 @@ class AioSqlitePool:
         return inst
 
     async def get_connection(self) -> aiosqlite.Connection:
-        """返回数据库连接对象 超过30秒未返回则新建连接对象"""
+        """返回数据库连接对象
+        超过30秒未返回则新建连接对象
+        """
         try:
             self._py_logger.debug('从queue中获取连接对象')
             conn = await asyncio.wait_for(self._idle_queue.get(), timeout=30)
@@ -100,7 +102,9 @@ class AioSqliteStorage(storage.StorageBase):
         return self
 
     async def init_db(self):
-        """设置编码为utf8 表不存在则建表"""
+        """设置编码为utf8
+        表不存在则建表
+        """
         async with self.db_pool.connect() as conn:
 
             sql = r"SELECT count(name) FROM sqlite_master WHERE type='table' AND name='{table_name}'"
@@ -185,7 +189,7 @@ class AioSqliteStorage(storage.StorageBase):
         return job_info
 
     async def remove_job(self, uuid: str) -> typing.Optional[str]:
-        """从数据库删除一个job"""
+        """从数据库删除一个job."""
         sql = r"""DELETE FROM jobs WHERE uuid=?;"""
         self._py_logger.debug('在storage中删除任务 %s', uuid)
         async with self.db_pool.connect() as conn:
@@ -199,7 +203,10 @@ class AioSqliteStorage(storage.StorageBase):
         return uuid
 
     async def update_job_state(self, uuid: str, active: int) -> None:
-        """更新任务状态 active=1为已激活（默认） active=0为已停止"""
+        """更新任务状态
+        active=1为已激活（默认）
+        active=0为已停止
+        """
         sql = r"""UPDATE jobs SET active=? WHERE uuid=?;"""
         self._py_logger.debug('在storage中更新job状态 active=%s', active)
         async with self.db_pool.connect() as conn:
@@ -240,7 +247,7 @@ class AioSqliteStorage(storage.StorageBase):
                 self._py_logger.exception(e)
 
     async def job_log_get_record(self, shot_id: str) -> typing.Optional[storage.LogRecord]:
-        """通过shot_id获取日志文件的数据库记录"""
+        """通过shot_id获取日志文件的数据库记录."""
         sql = r"""SELECT * FROM job_logs WHERE shot_id=? AND deleted=0;"""
         self._py_logger.debug('在storage中查询任务log记录 shot_id:%s', shot_id)
         async with self.db_pool.connect() as conn:
@@ -271,7 +278,7 @@ class AioSqliteStorage(storage.StorageBase):
         return out_list
 
     async def job_logs_remove_shot_id(self, shot_id: typing.Union[str, typing.List[str]]) -> typing.List[str]:
-        """根据shot_id从storage中删除记录"""
+        """根据shot_id从storage中删除记录."""
         sql = r"""DELETE FROM job_logs WHERE shot_id=?;"""
         if not isinstance(shot_id, list):
             shot_id = [shot_id]
@@ -282,7 +289,7 @@ class AioSqliteStorage(storage.StorageBase):
         return shot_id
 
     async def job_logs_set_deleted(self, uuid: str) -> int:
-        """删除job时 将对应uuid的job log设置为deleted(并非真实删除)"""
+        """删除job时 将对应uuid的job log设置为deleted(并非真实删除)."""
         sql = r"""UPDATE job_logs SET deleted=1 WHERE uuid=?;"""
         self._py_logger.debug('在storage中job log设置为deleted uuid:%s', uuid)
         async with self.db_pool.connect() as conn:
@@ -292,7 +299,9 @@ class AioSqliteStorage(storage.StorageBase):
             return conn.total_changes
 
     async def job_logs_get_deleted(self) -> typing.List[storage.LogRecord]:
-        """获取所有设置为deleted的shot_id 用于进一步清理"""
+        """获取所有设置为deleted的shot_id
+        用于进一步清理
+        """
         sql = r"""SELECT * FROM job_logs WHERE deleted=1;"""
         self._py_logger.debug('在storage中查询已删除任务log记录')
         async with self.db_pool.connect() as conn:
@@ -303,7 +312,9 @@ class AioSqliteStorage(storage.StorageBase):
         return out_list
 
     async def job_logs_get_undeleted(self, limit: int) -> typing.List[storage.LogRecord]:
-        """获取所有没有设置为deleted的shot_id 用于api"""
+        """获取所有没有设置为deleted的shot_id
+        用于api
+        """
         if limit <= 0:
             sql = r"SELECT * FROM job_logs WHERE deleted=0 ORDER BY datetime(date_start) DESC ;"
         else:
@@ -317,7 +328,9 @@ class AioSqliteStorage(storage.StorageBase):
         return out_list
 
     async def job_logs_get_all(self) -> typing.List[storage.LogRecord]:
-        """获取所有shot_id 包括deleted"""
+        """获取所有shot_id
+        包括deleted
+        """
         sql = r"""SELECT * FROM job_logs;"""
         self._py_logger.debug('在storage中查询所有任务log记录')
         async with self.db_pool.connect() as conn:

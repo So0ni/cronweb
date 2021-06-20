@@ -91,7 +91,7 @@ class CronWeb:
         return self
 
     async def shoot(self, command: str, param: str, uuid: str, timeout: float = 1800) -> None:
-        """使用worker执行job"""
+        """使用worker执行job."""
         self._py_logger.info('分发任务到worker uuid:%s', uuid)
         return await self._worker.shoot(command, param, uuid, timeout)
 
@@ -108,7 +108,7 @@ class CronWeb:
         return job
 
     def cron_is_valid(self, cron_exp: str) -> bool:
-        """判断cron表达式是否有效"""
+        """判断cron表达式是否有效."""
         return self._trigger.cron_is_valid(cron_exp)
 
     async def update_job(self, uuid: str, cron_exp: str, command: str, param: str,
@@ -143,13 +143,15 @@ class CronWeb:
         return job
 
     async def get_jobs(self) -> typing.Dict[str, trigger.JobInfo]:
-        """获取所有job的dict 获取前会执行job检查"""
+        """获取所有job的dict
+        获取前会执行job检查
+        """
         self._py_logger.info('获取所有任务')
         await self.job_check()
         return self._trigger.get_jobs()
 
     async def update_job_state(self, uuid: str, active: int) -> typing.Optional[trigger.JobInfo]:
-        """更新job active状态"""
+        """更新job active状态."""
         self._py_logger.info('更新job active状态')
         await self._storage.update_job_state(uuid, active)
         if active == 0:
@@ -159,28 +161,34 @@ class CronWeb:
         return job_info
 
     def stop_all_trigger(self) -> typing.Dict[str, trigger.JobInfo]:
-        """停止trigger中的所有任务 但是并不从中删除(暂时不考虑写入数据库 用于停止后避免启动新进程)"""
+        """停止trigger中的所有任务
+        但是并不从中删除(暂时不考虑写入数据库 用于停止后避免启动新进程)
+        """
         return self._trigger.stop_all()
 
     def get_log_queue(self, uuid: str, shot_id: str,
                       timeout_log: float) -> typing.Tuple[asyncio.queues.Queue, pathlib.Path]:
-        """获取对应uuid的日志queue实例 运行开始时间和结束时间由queue实例写入"""
+        """获取对应uuid的日志queue实例
+        运行开始时间和结束时间由queue实例写入
+        """
         return self._aiolog.get_log_queue(uuid, shot_id, timeout_log)
 
     async def stop_running_by_shot_id(self, shot_id: str) -> typing.Optional[str]:
-        """通过shot_id结束正在运行的进程 返回shot_id None则为shot_id未运行"""
+        """通过shot_id结束正在运行的进程
+        返回shot_id None则为shot_id未运行
+        """
         return await self._worker.kill_by_shot_id(shot_id)
 
     async def job_logs_get_undeleted(self, limit: int) -> typing.List[storage.LogRecord]:
-        """取出所有在storage中未标记未删除的运行记录"""
+        """取出所有在storage中未标记未删除的运行记录."""
         return await self._storage.job_logs_get_undeleted(limit)
 
     async def job_logs_get_by_uuid(self, uuid: str) -> typing.List[storage.LogRecord]:
-        """通过uuid在storage中取出运行记录"""
+        """通过uuid在storage中取出运行记录."""
         return await self._storage.job_logs_get_by_uuid(uuid)
 
     async def job_log_get_by_shot_id(self, shot_id: str, limit_line: int = 1000) -> typing.Optional[str]:
-        """通过shot_id获取日志文件内容"""
+        """通过shot_id获取日志文件内容."""
         record = await self._storage.job_log_get_record(shot_id)
         if not record:
             return None
@@ -188,20 +196,24 @@ class CronWeb:
         return log_str
 
     async def stop_all_running_jobs(self) -> typing.Dict[str, str]:
-        """停止worker所有运行中的job 并返回成功结束的job {shot_id: uuid}"""
+        """停止worker所有运行中的job
+        并返回成功结束的job {shot_id: uuid}
+        """
         return await self._worker.kill_all_running_jobs()
 
     def get_all_running_jobs(self) -> typing.Dict[str, typing.Tuple[str, str]]:
-        """从worker中获取正在运行中的job {shot_id: uuid}"""
+        """从worker中获取正在运行中的job
+        {shot_id: uuid}
+        """
         return self._worker.get_running_jobs()
 
     async def set_job_done(self, shot_state: worker.JobState):
-        """将job状态设置为已结束(一般由worker设置)"""
+        """将job状态设置为已结束(一般由worker设置)."""
         self._py_logger.debug('任务执行结束 完成状态:%s uuid:%s', shot_state.state.name, shot_state.uuid)
         await self._storage.job_log_done(shot_state)
 
     async def set_job_running(self, log_path: typing.Union[str, pathlib.Path], shot_state: worker.JobState):
-        """将job状态设置为运行中(一般由worker设置) 返回log id"""
+        """将job状态设置为运行中(一般由worker设置) 返回log id."""
         self._py_logger.debug('任务开始执行 状态:%s uuid:%s', shot_state.state.name, shot_state.uuid)
         await self._storage.job_log_shoot(log_path, shot_state)
 
@@ -292,7 +304,9 @@ class CronWeb:
         self._py_logger.info('清理掉%s个记录已标记为删除的日志文件', count)
 
     async def log_expire_check(self, expire_days: int):
-        """检查数据库中所有日志记录 将过期log设置为deleted"""
+        """检查数据库中所有日志记录
+        将过期log设置为deleted
+        """
         records = await self._storage.job_logs_get_all()
         now = datetime.datetime.now()
         self._py_logger.info('检查storage中过期记录 时限: %s天', expire_days)

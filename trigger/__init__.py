@@ -19,7 +19,7 @@ class JobInfo(typing.NamedTuple):
 
 
 class JobDuplicateError(Exception):
-    """add duplicate job"""
+    """add duplicate job."""
 
 
 class TriggerBase(abc.ABC):

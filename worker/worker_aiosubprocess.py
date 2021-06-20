@@ -82,16 +82,16 @@ class AioSubprocessWorker(worker.WorkerBase):
                     if exit_code == 0:
                         state_proc = worker.JobStateEnum.DONE
                         self._py_logger.debug('任务完成 shot_id:%s', shot_id)
-                        await queue.put(f'\nJob DONE')
+                        await queue.put('\nJob DONE')
                     elif shot_id in self._killed_shot_id:
                         self._killed_shot_id.remove(shot_id)
                         state_proc = worker.JobStateEnum.KILLED
                         self._py_logger.debug('手动停止 ExitCode:%s shot_id:%s', exit_code, shot_id)
-                        await queue.put(f'\nJob KILLED')
+                        await queue.put('\nJob KILLED')
                     else:
                         state_proc = worker.JobStateEnum.ERROR
                         self._py_logger.debug('任务失败 ExitCode:%s shot_id:%s', exit_code, shot_id)
-                        await queue.put(f'\nJob FAILED')
+                        await queue.put('\nJob FAILED')
                     # 停止日志记录
                     await queue.put(logger.LogStop)
                     break
@@ -133,7 +133,9 @@ class AioSubprocessWorker(worker.WorkerBase):
         return None
 
     def get_running_jobs(self) -> typing.Dict[str, typing.Tuple[str, str]]:
-        """返回worker中正在运行任务的所有{shot_id: (uuid, date_start)}"""
+        """返回worker中正在运行任务的所有信息
+        {shot_id: (uuid, date_start)}
+        """
         self._py_logger.debug('获取worker中所有运行中任务')
         running = {shot_id: (value[0], value[2].date_start)
                    for shot_id, value in self._running_jobs.items()}
@@ -141,7 +143,9 @@ class AioSubprocessWorker(worker.WorkerBase):
         return running
 
     async def kill_all_running_jobs(self) -> typing.Dict[str, str]:
-        """关闭所有正在运行的任务 返回关闭成功的"""
+        """关闭所有正在运行的任务 返回关闭成功的信息
+        {shot_id: uuid}
+        """
         self._py_logger.info('停止worker中所有正在运行任务')
         success_dict = {}
         for key, job in self._running_jobs.items():

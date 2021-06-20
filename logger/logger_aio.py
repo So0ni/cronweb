@@ -20,6 +20,9 @@ class AioLogger(logger.LoggerBase):
 
     def get_log_queue(self, uuid: str, shot_id: str,
                       timeout_log: float) -> typing.Tuple[asyncio.queues.Queue, pathlib.Path]:
+        """获取日志记录的queue
+        返回 (日志记录的queue, 日志文件路径)
+        """
         self._py_logger.debug('获取执行日志通道 uuid:%s', uuid)
         queue = asyncio.Queue()
         now = datetime.datetime.now()
@@ -32,7 +35,9 @@ class AioLogger(logger.LoggerBase):
 
     async def read_log_by_path(self, log_path: typing.Union[str, pathlib.Path],
                                limit_line: int = 1000) -> typing.Optional[str]:
-        """根据path读取文件"""
+        """根据path读取日志文件
+        如果对应路径的日志文件不存在则返回None
+        """
         log_path = pathlib.Path(log_path)
         if not log_path.exists() or log_path.is_dir():
             self._py_logger.error('log文件不存在 %s', log_path)
@@ -46,7 +51,9 @@ class AioLogger(logger.LoggerBase):
         return ''.join(lines)
 
     def remove_log_file(self, log_path: typing.Union[str, pathlib.Path]) -> typing.Optional[pathlib.Path]:
-        """根据path删除文件"""
+        """根据path删除文件
+        如果对应路径的文件不存在则返回None
+        """
         log_path = pathlib.Path(log_path)
         if not log_path.exists() or log_path.is_dir():
             return None
@@ -54,12 +61,18 @@ class AioLogger(logger.LoggerBase):
         return log_path
 
     def get_all_log_file_path(self) -> typing.List[pathlib.Path]:
-        """获取所有日志文件的Path对象列表"""
+        """获取所有日志文件的Path对象列表
+        获取日志目录中所有日志文件路径
+        由于是同步的 不适合过于频繁调用 仅作为检查过期日志时使用
+        """
         return list(self.log_dir.glob('*.log'))
 
     @staticmethod
     def _log_recording_cb(task_dict: typing.Dict[str, asyncio.Task], file_name: str,
                           task: asyncio.Task):
+        """日志文件写入完成后回调
+        清理日志记录中的字典
+        """
         task_dict.pop(file_name)
 
     @staticmethod
@@ -67,6 +80,7 @@ class AioLogger(logger.LoggerBase):
                              path_log_file: typing.Union[str, pathlib.Path],
                              now: datetime.datetime,
                              timeout: float) -> None:
+        """用于从queue中记录日志."""
         async with aiofiles.open(str(path_log_file), 'w', encoding='utf8') as afp:
             await afp.write(f'{now}\n')
             while True:

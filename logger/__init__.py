@@ -43,5 +43,5 @@ class LoggerBase(abc.ABC):
 
     @abc.abstractmethod
     def get_all_log_file_path(self) -> typing.List[pathlib.Path]:
-        """获取所有日志文件的Path对象列表"""
+        """获取所有日志文件的Path对象列表."""
         pass

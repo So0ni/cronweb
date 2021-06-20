@@ -156,10 +156,10 @@ def generate_config_file(config: InfoConfig):
     input_default('输入新的API密码',
                   default=config.secret,
                   config=config, target='secret')
-    input_default(f'输入API监听主机地址',
+    input_default('输入API监听主机地址',
                   default=config.host,
                   config=config, target='host')
-    input_default(f'输入API监听主机端口',
+    input_default('输入API监听主机端口',
                   default=config.port,
                   return_type=int, config=config, target='port')
     input_default('输入数据库文件存放路径',
@@ -232,7 +232,7 @@ def create_certs(config: InfoConfig):
                 subprocess.check_call([
                     'openssl', 'req', '-x509', '-newkey', 'rsa:4096', '-sha256', '-days', '730',
                     '-nodes', '-keyout', f'{file_cert_key}', '-out', f'{file_cert}',
-                    '-subj', f'/CN=CronWebServer', '-addext',
+                    '-subj', '/CN=CronWebServer', '-addext',
                     f'subjectAltName=IP:{config.host}'
                 ])
                 print('服务端自签名证书生成完成\n'
@@ -253,7 +253,7 @@ def create_certs(config: InfoConfig):
                 subprocess.check_call([
                     'openssl', 'req', '-x509', '-newkey', 'rsa:4096', '-sha256', '-days', '730',
                     '-nodes', '-keyout', f'{file_ca_key}', '-out', f'{file_ca}',
-                    '-subj', f'/CN=CronWebClientCA'
+                    '-subj', '/CN=CronWebClientCA'
                 ])
                 print('客户端自签名CA证书生成完成\n'
                       f'客户端CA证书公钥文件路径: {file_ca} \n'
@@ -427,7 +427,6 @@ def after_linux(config: InfoConfig):
                 os.system(f'sudo usermod -a -G {current_group} {config.user_option}')
             else:
                 print('你需要手动创建用户并处理对应日志文件的读写权限')
-            pass
         print('你需要手动把service文件复制到systemd的目录中，并重载systemd')
 
     generate_service_unit()
@@ -491,10 +490,10 @@ def gen_user_cert(
         path_user_csr = config.dir_client_cert_gen / f'client_{serial}.csr'
         path_user_pfx = config.dir_client_cert_gen / f'client_{serial}.pfx'
     else:
-        path_user_cert = config.ssl_ca_certs.parent / f'client_nginx.pem'
-        path_user_key = config.ssl_ca_certs.parent / f'client_nginx.key'
-        path_user_csr = config.ssl_ca_certs.parent / f'client_nginx.csr'
-        path_user_pfx = config.ssl_ca_certs.parent / f'client_nginx.pfx'
+        path_user_cert = config.ssl_ca_certs.parent / 'client_nginx.pem'
+        path_user_key = config.ssl_ca_certs.parent / 'client_nginx.key'
+        path_user_csr = config.ssl_ca_certs.parent / 'client_nginx.csr'
+        path_user_pfx = config.ssl_ca_certs.parent / 'client_nginx.pfx'
 
     if not path_user_cert.parent.exists():
         path_user_cert.parent.mkdir(parents=True)
