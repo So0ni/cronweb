@@ -147,9 +147,9 @@ class CronWeb:
         """获取对应uuid的日志queue实例 运行开始时间和结束时间由queue实例写入"""
         return self._aiolog.get_log_queue(uuid, shot_id, timeout_log)
 
-    def stop_running_by_shot_id(self, shot_id: str) -> typing.Optional[str]:
+    async def stop_running_by_shot_id(self, shot_id: str) -> typing.Optional[str]:
         """通过shot_id结束正在运行的进程 返回shot_id None则为shot_id未运行"""
-        return self._worker.kill_by_shot_id(shot_id)
+        return await self._worker.kill_by_shot_id(shot_id)
 
     async def job_logs_get_undeleted(self, limit: int) -> typing.List[storage.LogRecord]:
         """取出所有在storage中未标记未删除的运行记录"""
@@ -167,9 +167,9 @@ class CronWeb:
         log_str = await self._aiolog.read_log_by_path(pathlib.Path(record.log_path), limit_line)
         return log_str
 
-    def stop_all_running_jobs(self) -> typing.Dict[str, str]:
+    async def stop_all_running_jobs(self) -> typing.Dict[str, str]:
         """停止worker所有运行中的job 并返回成功结束的job {shot_id: uuid}"""
-        return self._worker.kill_all_running_jobs()
+        return await self._worker.kill_all_running_jobs()
 
     def get_all_running_jobs(self) -> typing.Dict[str, typing.Tuple[str, str]]:
         """从worker中获取正在运行中的job {shot_id: uuid}"""
@@ -312,7 +312,7 @@ class CronWeb:
         self._py_logger.info('停止所有任务')
         self.stop_all_trigger()
         self._py_logger.info('停止所有正在执行的任务')
-        self.stop_all_running_jobs()
+        await self.stop_all_running_jobs()
         await self.job_check()
         await self._storage.stop()
 

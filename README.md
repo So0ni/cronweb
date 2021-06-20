@@ -12,7 +12,9 @@ CronWeb是一个不依赖crontab的cron服务，并有一个与之对应的WebUI
 
 * 可以中止正在执行的任务
 
-* 比较轻量(其实就是功能少)
+* 可配置的指数退避错误重试
+
+* 比较轻量，大部分状况下Linux中内存占用不足50MB(其实就是功能少)
 
 ## Warning
 
@@ -158,10 +160,6 @@ sudo systemctl start cronweb
 # 激活虚拟环境(如果有的话)
 python manage.py run
 ```
-
-## Todo
-
-- 错误重试
 
 ## Screenshots
 
