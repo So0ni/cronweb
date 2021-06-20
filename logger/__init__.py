@@ -14,7 +14,7 @@ class LogStop(Exception):
 
 
 class LoggerBase(abc.ABC):
-    def __init__(self, controller: typing.Optional[cronweb.CronWeb] = None):
+    def __init__(self, controller: typing.Optional[cronweb.CronWeb] = None, **kwargs):
         super().__init__()
         self._core: typing.Optional[cronweb.CronWeb] = controller
         self._py_logger: logging.Logger = logging.getLogger(f'cronweb.{self.__class__.__name__}')

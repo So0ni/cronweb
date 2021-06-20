@@ -17,13 +17,6 @@ import asyncio
 import pathlib
 import argparse
 import cronweb
-import logger.logger_aio
-import storage.storage_aiosqlite
-import trigger.trigger_aiocron
-import web.web_fastapi
-import worker.worker_aiosubprocess
-import logging
-import logging.config
 import yaml
 import typing
 
@@ -38,14 +31,19 @@ def load_config(path_config: typing.Optional[typing.Union[str, pathlib.Path]] = 
 
 
 async def init(config: typing.Dict[str, typing.Any]) -> cronweb.CronWeb:
-    logging.config.dictConfig(config['pylogger'])
-
-    core = cronweb.CronWeb(**config['core'])
-    logger_core = logger.logger_aio.AioLogger(controller=core, **config['logger'])
-    trigger_core = trigger.trigger_aiocron.TriggerAioCron(controller=core)
-    web_core = web.web_fastapi.WebFastAPI(controller=core, **config['web'])
-    worker_core = worker.worker_aiosubprocess.AioSubprocessWorker(controller=core, **config['worker'])
-    storage_core = await storage.storage_aiosqlite.AioSqliteStorage.create(controller=core, **config['storage'])
+    import logger.logger_aio
+    import storage.storage_aiosqlite
+    import trigger.trigger_aiocron
+    import web.web_fastapi
+    import worker.worker_aiosubprocess
+    core = await cronweb.CronWeb.create_from_config(
+        config,
+        logger.logger_aio.AioLogger,
+        trigger.trigger_aiocron.TriggerAioCron,
+        web.web_fastapi.WebFastAPI,
+        worker.worker_aiosubprocess.AioSubprocessWorker,
+        storage.storage_aiosqlite.AioSqliteStorage.create
+    )
     return core
 
 

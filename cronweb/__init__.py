@@ -8,6 +8,7 @@ import logger
 import typing
 import asyncio
 import logging
+import logging.config
 import pathlib
 import os
 import sys
@@ -49,6 +50,25 @@ class CronWeb:
             pathlib.Path(__file__).parent.parent.absolute()
         if self.dir_project.exists():
             os.chdir(self.dir_project)
+
+    @classmethod
+    async def create_from_config(cls,
+                                 config: typing.Dict[str, typing.Any],
+                                 factory_logger: typing.Type[logger.LoggerBase],
+                                 factory_trigger: typing.Type[trigger.TriggerBase],
+                                 factory_web: typing.Type[web.WebBase],
+                                 factory_worker: typing.Type[worker.WorkerBase],
+                                 factory_storage: typing.Callable[..., typing.Awaitable[storage.StorageBase]]
+                                 ) -> 'CronWeb':
+        if 'pylogger' in config:
+            logging.config.dictConfig(config['pylogger'])
+        core = cls(**config.get('core', {}))
+        factory_logger(controller=core, **config.get('logger', {}))
+        factory_trigger(controller=core, **config.get('trigger', {}))
+        factory_web(controller=core, **config.get('web', {}))
+        factory_worker(controller=core, **config.get('worker', {}))
+        await factory_storage(controller=core, **config.get('storage', {}))
+        return core
 
     def set_storage(self, storage_instance: storage.StorageBase):
         self._storage = storage_instance
