@@ -14,13 +14,18 @@ from uuid import uuid4
 
 class AioSubprocessWorker(worker.WorkerBase):
     def __init__(self, controller: typing.Optional[cronweb.CronWeb] = None,
-                 work_dir: typing.Optional[typing.Union[str, pathlib.Path]] = None):
+                 work_dir: typing.Optional[typing.Union[str, pathlib.Path]] = None,
+                 times_retry: int = 2, wait_retry_base=30):
         super().__init__(controller)
         self._running_jobs: typing.Dict[str, typing.Tuple[str, asyncio.subprocess.Process, worker.JobState]] = {}
         self._env: typing.Optional[typing.Dict[str, str]] = None
         self._scripts_dir: typing.Optional[typing.Union[str, pathlib.Path]] = None
         self._work_dir = pathlib.Path(work_dir).absolute() if work_dir else None
+        self.times_retry = times_retry
+        self.wait_retry_base = wait_retry_base
+
         self._killed_shot_id: typing.Set[str] = set()
+        self._waiting_for_retry: typing.Set[str] = set()
         if self._work_dir is not None and not self._work_dir.exists():
             self._work_dir.mkdir(parents=True)
 
@@ -43,7 +48,8 @@ class AioSubprocessWorker(worker.WorkerBase):
             if not self._work_dir.exists():
                 self._work_dir.mkdir(parents=True)
 
-    async def shoot(self, command: str, param: str, uuid: str, timeout: float) -> None:
+    async def _shoot(self, command: str, param: str,
+                     uuid: str, timeout: float) -> typing.Tuple[str, worker.JobStateEnum]:
         if self._env is None:
             self.load_env()
         shot_id = uuid4().hex
@@ -101,7 +107,30 @@ class AioSubprocessWorker(worker.WorkerBase):
         end = datetime.datetime.now()
         await self._core.set_job_done(worker.JobState(uuid, state_proc, shot_id, str(now), str(end)))
         self._running_jobs.pop(shot_id)
-        return
+        return shot_id, state_proc
+
+    async def shoot(self, command: str, param: str, uuid: str, timeout: float) -> None:
+        is_retry = False
+        shot_id_root: typing.Optional[str] = None
+        for count_shoot in range(self.times_retry + 1):
+            if is_retry:
+                wait_seconds = ((2 ** count_shoot) - 1) * self.wait_retry_base
+                self._py_logger.debug('等待%s秒后开始第%s次重试 共%s次重试',
+                                      wait_seconds, count_shoot, self.times_retry)
+                await asyncio.sleep(wait_seconds)
+            shot_id, state = await self._shoot(command, param, uuid, timeout)
+            if state.name != 'ERROR':
+                break
+            elif not is_retry:
+                self._py_logger.warning('初次运行失败 启动重试 shot_id: %s', shot_id)
+                is_retry = True
+                shot_id_root = shot_id
+                self._waiting_for_retry.add(shot_id_root)
+        # 不管是运行成功 重试后成功 还是超出重试次数 都要检查
+        if shot_id_root and shot_id_root in self._waiting_for_retry:
+            self._py_logger.warning('移除等待重试集合 shot_id: %s', shot_id_root)
+            self._waiting_for_retry.remove(shot_id_root)
+        return None
 
     def get_running_jobs(self) -> typing.Dict[str, typing.Tuple[str, str]]:
         """返回worker中正在运行任务的所有{shot_id: (uuid, date_start)}"""
