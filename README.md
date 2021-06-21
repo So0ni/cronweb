@@ -161,6 +161,10 @@ sudo systemctl start cronweb
 python manage.py run
 ```
 
+### 注意
+
+* 在命令中使用输入输出重定向应该是可以的，但是输出重定向之后会导致CronWeb过长时间获取不到输出信息，会被认为子进程已经卡死，达到超时时间后会被kill.(无输出超时时间为1800s)
+
 ## Screenshots
 
 ![WebUI 登录页](/assets/ss-login.png)
