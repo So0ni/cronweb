@@ -161,6 +161,9 @@ sudo systemctl start cronweb
 python manage.py run
 ```
 
+因为CronWeb并不包含守护进程，在不包含systemd的其它系统中，你需要通过一些手段来起到守护进程的作用。
+例如，Windows中可以借助工具封装成系统服务，MacOS中可以借助`launchd`，甚至可以借助`supervisor` `pm2`等工具起到守护进程的作用。
+
 ### 注意
 
 * 在命令中使用输入输出重定向应该是可以的，但是输出重定向之后会导致CronWeb过长时间获取不到输出信息，会被认为子进程已经卡死，达到超时时间后会被kill.(无输出超时时间为1800s)
