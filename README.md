@@ -1,5 +1,6 @@
 # CronWeb
 
+[![License: GPL v3](https://img.shields.io/badge/License-GPL%20v3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Codacy Badge](https://api.codacy.com/project/badge/Grade/d26364e5d2bc4007b91ea241f2ad8272)](https://app.codacy.com/gh/So0ni/cronweb?utm_source=github.com&utm_medium=referral&utm_content=So0ni/cronweb&utm_campaign=Badge_Grade_Settings)
 
 CronWeb是一个不依赖crontab的cron服务，并有一个与之对应的WebUI - [CronWeb-front](https://github.com/So0ni/cronweb-front)
