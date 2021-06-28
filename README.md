@@ -14,7 +14,9 @@ CronWeb是一个不依赖crontab的cron服务，并有一个与之对应的WebUI
 
 * 可配置的指数退避错误重试
 
-* 支持运行结果的Webhook
+* 支持推送运行结果的Webhook
+
+* 使用sqlite3，不用额外安装数据库(某些情况下也可能是坏处)
 
 * 比较轻量，大部分状况下Linux中内存占用不足50MB(其实就是功能少)
 
@@ -180,7 +182,7 @@ Webhook以POST的方式请求hook URL，其对应的POST body为json：
 
 ```json
 {
-  "shot_id": "执行任务的 str",
+  "shot_id": "执行任务的编号 str",
   "state": "任务运行结果 str [DONE | ERROR | KILLED]",
   "job_type": "任务触发类型 str [SCHEDULE | RETRY | MANUAL]",
   "timestamp": "webhook请求时间戳 int 单位:ms"
