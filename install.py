@@ -197,7 +197,7 @@ def generate_config_file(config: InfoConfig):
         config.client_cert = False
         print('禁用客户端证书验证，你需要确保WebAPI不会被非法访问')
 
-    if yes_or_no('启用任务运行webhook吗?', 'yes', config=config):
+    if yes_or_no('启用任务运行webhook吗?', 'no', config=config):
         input_default('输入webhook的URL',
                       default=config.webhook_url,
                       return_type=str,
@@ -215,7 +215,7 @@ def generate_config_file(config: InfoConfig):
         'ssl_certfile': config.ssl_certfile or '',
         'ssl_keyfile': config.ssl_keyfile or '',
         'ssl_ca_certs': config.ssl_ca_certs or '',
-        'webhook_url': config.webhook_url,
+        'webhook_url': config.webhook_url or '',
         'webhook_secret': config.webhook_secret
 
     })
