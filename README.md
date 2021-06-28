@@ -199,6 +199,16 @@ CronWeb的Webhook的请求中包含名为`X-Cronweb-Token`的头信息，为POST
 
 3. 对比前两步生成的摘要，一致则验签成功
 
+#### 预防可能针对Webhook的攻击
+
+* CronWeb不会对同一个shot_id请求两次或以上，对重复的shot_id请求进行过滤
+
+* 比较载荷和本地时间戳，设定一个安全阈值，丢弃超时的请求
+
+* 设定请求来源ip白名单
+
+* 对webhook使用https
+
 ## Screenshots
 
 ![WebUI 登录页](/assets/ss-login.png)
