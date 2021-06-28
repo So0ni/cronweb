@@ -5,6 +5,7 @@ import json
 import typing
 import getpass
 import pathlib
+import secrets
 import platform
 import argparse
 import subprocess
@@ -59,6 +60,8 @@ class InfoConfig:
     path_nginx_conf: pathlib.Path = (PATH_PROJ_ROOT / 'cronweb_nginx.conf')
     dir_client_cert_gen: pathlib.Path = (PATH_PROJ_ROOT / 'dist')
     password_pfx: str = ''
+    webhook_url: typing.Optional[str] = None
+    webhook_secret: str = secrets.token_urlsafe(16)
 
     bin_python: typing.Optional[pathlib.Path] = None
 
@@ -194,6 +197,16 @@ def generate_config_file(config: InfoConfig):
         config.client_cert = False
         print('禁用客户端证书验证，你需要确保WebAPI不会被非法访问')
 
+    if yes_or_no('启用任务运行webhook吗?', 'yes', config=config):
+        input_default('输入webhook的URL',
+                      default=config.webhook_url,
+                      return_type=str,
+                      config=config, target='webhook_url')
+        input_default('输入webhook的签名secret',
+                      default=config.webhook_secret,
+                      return_type=str,
+                      config=config, target='webhook_secret')
+
     config_str = tmpl_config.format(**{
         'secret': config.secret, 'host': config.host, 'port': config.port,
         'db_path': config.db_path, 'log_dir': config.log_dir,
@@ -201,7 +214,10 @@ def generate_config_file(config: InfoConfig):
         'ssl_cert_reqs': 2 if config.client_cert else 0,
         'ssl_certfile': config.ssl_certfile or '',
         'ssl_keyfile': config.ssl_keyfile or '',
-        'ssl_ca_certs': config.ssl_ca_certs or ''
+        'ssl_ca_certs': config.ssl_ca_certs or '',
+        'webhook_url': config.webhook_url,
+        'webhook_secret': config.webhook_secret
+
     })
     if not config.path_config.parent.exists():
         config.path_config.parent.mkdir(parents=True)

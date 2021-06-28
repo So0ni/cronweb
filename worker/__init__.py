@@ -16,6 +16,12 @@ class JobStateEnum(enum.Enum):
     UNKNOWN = 5
 
 
+class JobTypeEnum(enum.Enum):
+    SCHEDULE = 1
+    RETRY = 2
+    MANUAL = 3
+
+
 class JobState(typing.NamedTuple):
     uuid: str
     state: JobStateEnum
@@ -39,7 +45,7 @@ class WorkerBase(abc.ABC):
             self._core.set_worker_default(self)
 
     @abc.abstractmethod
-    async def shoot(self, command: str, param: str, uuid: str, timeout: float):
+    async def shoot(self, command: str, param: str, uuid: str, timeout: float, job_type: JobTypeEnum):
         pass
 
     @abc.abstractmethod

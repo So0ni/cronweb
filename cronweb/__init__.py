@@ -90,10 +90,11 @@ class CronWeb:
         self._aiolog: typing.Optional[logger.LoggerBase] = aiolog_instance
         return self
 
-    async def shoot(self, command: str, param: str, uuid: str, timeout: float = 1800) -> None:
+    async def shoot(self, command: str, param: str, uuid: str, timeout: float,
+                    job_type: worker.JobTypeEnum = worker.JobTypeEnum.SCHEDULE) -> None:
         """使用worker执行job."""
         self._py_logger.info('分发任务到worker uuid:%s', uuid)
-        return await self._worker.shoot(command, param, uuid, timeout)
+        return await self._worker.shoot(command, param, uuid, timeout, job_type)
 
     async def add_job(self, cron_exp: str, command: str, param: str,
                       uuid: typing.Optional[str] = None, name: str = '') -> typing.Optional[trigger.JobInfo]:

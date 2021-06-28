@@ -4,3 +4,4 @@ aiocron == 1.6
 aiofiles ~= 0.7.0
 aiosqlite ~= 0.17.0
 pyyaml ~= 5.4.1
+aiohttp ~= 3.7.4

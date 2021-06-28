@@ -8,6 +8,9 @@ import worker
 import cronweb
 import logger
 import locale
+import hmac
+import base64
+import aiohttp
 import asyncio.subprocess
 from uuid import uuid4
 
@@ -15,7 +18,9 @@ from uuid import uuid4
 class AioSubprocessWorker(worker.WorkerBase):
     def __init__(self, controller: typing.Optional[cronweb.CronWeb] = None,
                  work_dir: typing.Optional[typing.Union[str, pathlib.Path]] = None,
-                 times_retry: int = 2, wait_retry_base=30):
+                 times_retry: int = 2, wait_retry_base=30,
+                 webhook_url: typing.Optional[str] = None,
+                 webhook_secret: typing.Optional[str] = None):
         super().__init__(controller)
         self._running_jobs: typing.Dict[str, typing.Tuple[str, asyncio.subprocess.Process, worker.JobState]] = {}
         self._env: typing.Optional[typing.Dict[str, str]] = None
@@ -23,6 +28,9 @@ class AioSubprocessWorker(worker.WorkerBase):
         self._work_dir = pathlib.Path(work_dir).absolute() if work_dir else None
         self.times_retry = times_retry
         self.wait_retry_base = wait_retry_base
+        self.webhook_url = webhook_url
+        self.webhook_secret = webhook_secret if isinstance(webhook_secret, bytes) else webhook_secret.encode('utf8')
+        self.webhook_timeout = aiohttp.ClientTimeout(total=30)
 
         self._killed_shot_id: typing.Set[str] = set()
         self._waiting_for_retry: typing.Set[str] = set()
@@ -49,7 +57,7 @@ class AioSubprocessWorker(worker.WorkerBase):
                 self._work_dir.mkdir(parents=True)
 
     async def _shoot(self, command: str, param: str,
-                     uuid: str, timeout: float) -> typing.Tuple[str, worker.JobStateEnum]:
+                     uuid: str, timeout: float, job_type: worker.JobTypeEnum) -> typing.Tuple[str, worker.JobStateEnum]:
         if self._env is None:
             self.load_env()
         shot_id = uuid4().hex
@@ -109,7 +117,8 @@ class AioSubprocessWorker(worker.WorkerBase):
         self._running_jobs.pop(shot_id)
         return shot_id, state_proc
 
-    async def shoot(self, command: str, param: str, uuid: str, timeout: float) -> None:
+    async def shoot(self, command: str, param: str, uuid: str, timeout: float,
+                    job_type: worker.JobTypeEnum) -> None:
         is_retry = False
         shot_id_root: typing.Optional[str] = None
         for count_shoot in range(self.times_retry + 1):
@@ -117,8 +126,10 @@ class AioSubprocessWorker(worker.WorkerBase):
                 wait_seconds = ((2 ** count_shoot) - 1) * self.wait_retry_base
                 self._py_logger.debug('等待%s秒后开始第%s次重试 共%s次重试',
                                       wait_seconds, count_shoot, self.times_retry)
+                job_type = worker.JobTypeEnum.RETRY
                 await asyncio.sleep(wait_seconds)
-            shot_id, state = await self._shoot(command, param, uuid, timeout)
+            shot_id, state = await self._shoot(command, param, uuid, timeout, job_type)
+            await self._webhook_job_done(shot_id, state, job_type)
             if state.name != 'ERROR':
                 break
             elif not is_retry:
@@ -131,6 +142,41 @@ class AioSubprocessWorker(worker.WorkerBase):
             self._py_logger.warning('移除等待重试集合 shot_id: %s', shot_id_root)
             self._waiting_for_retry.remove(shot_id_root)
         return None
+
+    def _webhook_sign(self, payload: bytes) -> str:
+        sign_bytes = hmac.new(self.webhook_secret, payload, 'sha256').digest()
+        sign = base64.b64encode(sign_bytes).decode()
+        return sign
+
+    async def _webhook_job_done(self, shot_id: str, state: worker.JobStateEnum,
+                                job_type: worker.JobTypeEnum) -> None:
+        if not self.webhook_url:
+            return None
+        self._py_logger.info('触发任务结束webhook')
+        payload_dict = {
+            'shot_id': shot_id,
+            'state': state.name,
+            'job_type': job_type.name,
+            'timestamp': int(datetime.datetime.now().timestamp() * 1000)
+        }
+        payload = json.dumps(payload_dict, ensure_ascii=False).encode('utf8')
+        sign = self._webhook_sign(payload)
+        headers = {
+            'Accept': 'application/json',
+            'User-Agent': 'CronWeb/Webhook',
+            'Content-Type': 'application/json; charset=UTF-8',
+            'X-Cronweb-Token': sign,
+            'X-Cronweb-Timestamp': f'{payload_dict["timestamp"]}'
+        }
+
+        async with aiohttp.ClientSession(timeout=self.webhook_timeout) as session:
+            try:
+                resp = await session.post(self.webhook_url, data=payload, headers=headers)
+                resp.close()
+            except Exception as e:
+                self._py_logger.error('webhook调用失败')
+                self._py_logger.exception(e)
+        self._py_logger.info('webhook结束')
 
     def get_running_jobs(self) -> typing.Dict[str, typing.Tuple[str, str]]:
         """返回worker中正在运行任务的所有信息

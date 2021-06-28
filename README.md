@@ -14,6 +14,8 @@ CronWeb是一个不依赖crontab的cron服务，并有一个与之对应的WebUI
 
 * 可配置的指数退避错误重试
 
+* 支持运行结果的Webhook
+
 * 比较轻量，大部分状况下Linux中内存占用不足50MB(其实就是功能少)
 
 ## Warning
@@ -161,12 +163,41 @@ sudo systemctl start cronweb
 python manage.py run
 ```
 
-因为CronWeb并不包含守护进程，在不包含systemd的其它系统中，你需要通过一些手段来起到守护进程的作用。
-例如，Windows中可以借助工具封装成系统服务，MacOS中可以借助`launchd`，甚至可以借助`supervisor` `pm2`等工具起到守护进程的作用。
+因为CronWeb并不包含守护进程，在不包含systemd的其它系统中，你需要通过一些手段来起到守护进程的作用。 例如，Windows中可以借助工具封装成系统服务，MacOS中可以借助`launchd`
+，甚至可以借助`supervisor` `pm2`等工具起到守护进程的作用。
 
 ### 注意
 
 * 在命令中使用输入输出重定向应该是可以的，但是输出重定向之后会导致CronWeb过长时间获取不到输出信息，会被认为子进程已经卡死，达到超时时间后会被kill.(无输出超时时间为1800s)
+
+## Webhook
+
+CronWeb支持以Webhook的方式推送运行结果。
+
+### Payload
+
+Webhook以POST的方式请求hook URL，其对应的POST body为json：
+
+```json
+{
+  "shot_id": "执行任务的 str",
+  "state": "任务运行结果 str [DONE | ERROR | KILLED]",
+  "job_type": "任务触发类型 str [SCHEDULE | RETRY | MANUAL]",
+  "timestamp": "webhook请求时间戳 int 单位:ms"
+}
+```
+
+### Sign
+
+CronWeb的Webhook的请求中包含名为`X-Cronweb-Token`的头信息，为POST body的签名信息。
+
+#### 验签方式
+
+1. 将`X-Cronweb-Token`头信息base64解码获得二进制签名摘要
+
+2. 用预置webhook密码作为key，将原始二进制POST body以`HMAC-sha256`的方式计算摘要
+
+3. 对比前两步生成的摘要，一致则验签成功
 
 ## Screenshots
 

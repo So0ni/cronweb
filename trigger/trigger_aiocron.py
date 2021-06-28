@@ -6,6 +6,7 @@ import asyncio
 from uuid import uuid4
 import croniter
 import cronweb
+import worker
 
 
 class CronJob(typing.NamedTuple):
@@ -41,8 +42,11 @@ class TriggerAioCron(trigger.TriggerBase):
             return self.update_job(uuid, cron_exp, command, param, date_update, name)
 
         def job_func(core_inner: cronweb.CronWeb,
-                     command_inner: str, param_inner: str):
-            return asyncio.ensure_future(core_inner.shoot(command_inner, param_inner, uuid))
+                     command_inner: str, param_inner: str,
+                     timeout: float = 1800,
+                     job_type=worker.JobTypeEnum.SCHEDULE):
+            return asyncio.ensure_future(core_inner.shoot(command_inner, param_inner, uuid, timeout,
+                                                          job_type=job_type))
 
         cron = aiocron.Cron(spec=cron_exp,
                             func=job_func,
@@ -101,7 +105,7 @@ class TriggerAioCron(trigger.TriggerBase):
             self._py_logger.warning('uuid不存在于trigger 不可启动: %s', uuid)
             return None
         job = self._job_dict[uuid]
-        job.cron.call_func()
+        job.cron.call_func(job_type=worker.JobTypeEnum.MANUAL)
         return self._cronjob_to_jobinfo(job)
 
     def get_jobs(self) -> typing.Dict[str, trigger.JobInfo]:
