@@ -220,5 +220,5 @@ config.yaml
 scripts/
 certs/
 hooks
-!.hooks/__init__.py
-!.hooks/README.md
+!hooks/__init__.py
+!hooks/README.md
