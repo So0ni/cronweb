@@ -121,6 +121,7 @@ class AioSubprocessWorker(worker.WorkerBase):
                     job_type: worker.JobTypeEnum) -> None:
         is_retry = False
         shot_id_root: typing.Optional[str] = None
+        hook_tasks: typing.List[asyncio.Task] = []
         for count_shoot in range(self.times_retry + 1):
             if is_retry:
                 wait_seconds = ((2 ** count_shoot) - 1) * self.wait_retry_base
@@ -129,7 +130,14 @@ class AioSubprocessWorker(worker.WorkerBase):
                 job_type = worker.JobTypeEnum.RETRY
                 await asyncio.sleep(wait_seconds)
             shot_id, state = await self._shoot(command, param, uuid, timeout, job_type)
-            await self._webhook_job_done(shot_id, state, job_type)
+
+            # 优先webhook
+            if self.webhook_url:
+                hook_tasks.append(asyncio.create_task(self._webhook_job_done(shot_id, state, job_type)))
+            # 其后本地hook 为避免影响重试机制使用task交给loop执行
+            for func in self._job_done_hooks:
+                hook_tasks.append(asyncio.create_task(func(shot_id, state, job_type)))
+
             if state.name != 'ERROR':
                 break
             elif not is_retry:
@@ -141,6 +149,19 @@ class AioSubprocessWorker(worker.WorkerBase):
         if shot_id_root and shot_id_root in self._waiting_for_retry:
             self._py_logger.warning('移除等待重试集合 shot_id: %s', shot_id_root)
             self._waiting_for_retry.remove(shot_id_root)
+        if hook_tasks:
+            gather = asyncio.gather(*hook_tasks, return_exceptions=True)
+            try:
+                # 限制hooks超时时间 超时后hook会被取消 hook函数需要捕获
+                await asyncio.wait_for(gather, timeout=60)
+            except asyncio.TimeoutError:
+                self._py_logger.error('有hook执行超时')
+            try:
+                # 解决_GatheringFuture exception was never retrieved
+                await gather
+            except asyncio.CancelledError:
+                self._py_logger.warning('未完成的hook已被取消')
+
         return None
 
     def _webhook_sign(self, payload: bytes) -> str:
