@@ -74,6 +74,8 @@ class AioLogger(logger.LoggerBase):
         清理日志记录中的字典
         """
         task_dict.pop(file_name)
+        # 如果不手动获取异常 异常会在task对象销毁时传递给loop(异常发生的情况下)
+        task.exception()
 
     @staticmethod
     async def _log_recording(queue: asyncio.queues.Queue,
