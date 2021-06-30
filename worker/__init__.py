@@ -36,6 +36,12 @@ class WorkerBase(abc.ABC):
         self._core: typing.Optional[cronweb.CronWeb] = controller
         self._py_logger: logging.Logger = logging.getLogger(f'cronweb.{self.__class__.__name__}')
         self.controller_default()
+        self._job_done_hooks: typing.List[
+            typing.Callable[[str, JobStateEnum, JobTypeEnum], typing.Awaitable[None]]] = []
+
+    def add_job_done_hook(self, func: typing.Callable[[str, JobStateEnum, JobTypeEnum], typing.Awaitable[None]]):
+        if func not in self._job_done_hooks:
+            self._job_done_hooks.append(func)
 
     def set_controller(self, controller: cronweb.CronWeb):
         self._core = controller

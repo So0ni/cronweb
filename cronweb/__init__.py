@@ -218,6 +218,10 @@ class CronWeb:
         self._py_logger.debug('任务开始执行 状态:%s uuid:%s', shot_state.state.name, shot_state.uuid)
         await self._storage.job_log_shoot(log_path, shot_state)
 
+    def add_job_done_hook(self, func: typing.Callable[[str, worker.JobStateEnum, worker.JobTypeEnum],
+                                                      typing.Awaitable[None]]):
+        self._worker.add_job_done_hook(func)
+
     async def job_check(self):
         """对比trigger storage worker三者的job状态，并进行修正
         启动时会进行一次完成从storage到trigger的载入
