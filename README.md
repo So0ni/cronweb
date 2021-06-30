@@ -15,7 +15,7 @@ CronWeb是一个不依赖crontab的cron服务，并有一个与之对应的WebUI
 
 * 可配置的指数退避错误重试
 
-* 支持推送运行结果的Webhook
+* 支持推送运行结果的Webhook和本地hook
 
 * 使用sqlite3，不用额外安装数据库(某些情况下也可能是坏处)
 
@@ -171,11 +171,19 @@ python manage.py run
 
 ### 注意
 
-* 在命令中使用输入输出重定向应该是可以的，但是输出重定向之后会导致CronWeb过长时间获取不到输出信息，会被认为子进程已经卡死，达到超时时间后会被kill.(无输出超时时间为1800s)
+在命令中使用输入输出重定向应该是可以的，但是输出重定向之后会导致CronWeb过长时间获取不到输出信息，会被认为子进程已经卡死，达到超时时间后会被kill.(无输出超时时间为1800s)
 
 ## Webhook
 
 CronWeb支持以Webhook的方式推送运行结果。
+
+### 开启方式
+
+设置配置文件中的`worker.webhook_url`和`worker.webhook_secret`两个配置。
+
+* `worker.webhook_url` 包含http或https前缀
+
+* `worker.webhook_secret` 用于验签，需要保密不可泄漏
 
 ### Payload
 
@@ -211,6 +219,38 @@ CronWeb的Webhook的请求中包含名为`X-Cronweb-Token`的头信息，为POST
 * 设定请求来源ip白名单
 
 * 对webhook使用https
+
+## Local Hooks
+
+CronWeb也支持添加本地代码的hook。CronWeb启动脚本会在启动时扫描并加载符合规则的函数作为hook函数。
+
+> 相比webhook 不要额外建立hook监听服务，例如可以直接在这里面执行消息推送
+
+### 约定规则
+
+1. 项目目录下的`hooks`目录中，以`hook`开头的python脚本文件
+
+2. 以`hook_job_done`开头的异步函数(普通同步函数不会被加载)
+
+3. hook函数签名
+
+```python
+import worker
+
+
+async def hook_job_done_sample(shot_id: str, state: worker.JobStateEnum, job_type: worker.JobTypeEnum) -> None:
+    pass
+```
+
+### 注意
+
+1. 不要在hook函数中直接使用阻塞型io，这会阻塞事件循环，导致整体运行延迟。使用`asyncio.run_in_executor`
+
+2. 不要在hook函数中直接进行CPU密集型操作。同样使用`asyncio.run_in_executor`
+
+3. hook函数有60s超时限制，超时会被取消执行，需要在hooks函数中捕捉`asyncio.CancelledError`
+
+4. 使用全局变量和并发时注意内存泄露问题
 
 ## Screenshots
 
