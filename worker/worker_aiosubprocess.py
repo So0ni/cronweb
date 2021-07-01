@@ -19,8 +19,8 @@ class AioSubprocessWorker(worker.WorkerBase):
     def __init__(self, controller: typing.Optional[cronweb.CronWeb] = None,
                  work_dir: typing.Optional[typing.Union[str, pathlib.Path]] = None,
                  times_retry: int = 2, wait_retry_base=30,
-                 webhook_url: typing.Optional[str] = None,
-                 webhook_secret: typing.Optional[str] = None):
+                 webhook_url: str = '',
+                 webhook_secret: str = ''):
         super().__init__(controller)
         self._running_jobs: typing.Dict[str, typing.Tuple[str, asyncio.subprocess.Process, worker.JobState]] = {}
         self._env: typing.Optional[typing.Dict[str, str]] = None
@@ -117,7 +117,7 @@ class AioSubprocessWorker(worker.WorkerBase):
         self._running_jobs.pop(shot_id)
         return shot_id, state_proc
 
-    async def shoot(self, command: str, param: str, uuid: str, timeout: float,
+    async def shoot(self, command: str, param: str, uuid: str, timeout: float, name: str,
                     job_type: worker.JobTypeEnum) -> None:
         is_retry = False
         shot_id_root: typing.Optional[str] = None
@@ -133,10 +133,10 @@ class AioSubprocessWorker(worker.WorkerBase):
 
             # 优先webhook
             if self.webhook_url:
-                hook_tasks.append(asyncio.create_task(self._webhook_job_done(shot_id, state, job_type)))
+                hook_tasks.append(asyncio.create_task(self._webhook_job_done(name, shot_id, state, job_type)))
             # 其后本地hook 为避免影响重试机制使用task交给loop执行
             for func in self._job_done_hooks:
-                hook_tasks.append(asyncio.create_task(func(shot_id, state, job_type)))
+                hook_tasks.append(asyncio.create_task(func(name, shot_id, state, job_type)))
 
             if state.name != 'ERROR':
                 break
@@ -169,12 +169,13 @@ class AioSubprocessWorker(worker.WorkerBase):
         sign = base64.b64encode(sign_bytes).decode()
         return sign
 
-    async def _webhook_job_done(self, shot_id: str, state: worker.JobStateEnum,
+    async def _webhook_job_done(self, name: str, shot_id: str, state: worker.JobStateEnum,
                                 job_type: worker.JobTypeEnum) -> None:
         if not self.webhook_url:
             return None
         self._py_logger.info('触发任务结束webhook')
         payload_dict = {
+            'name': name,
             'shot_id': shot_id,
             'state': state.name,
             'job_type': job_type.name,

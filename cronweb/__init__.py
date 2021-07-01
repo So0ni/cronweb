@@ -90,11 +90,11 @@ class CronWeb:
         self._aiolog: typing.Optional[logger.LoggerBase] = aiolog_instance
         return self
 
-    async def shoot(self, command: str, param: str, uuid: str, timeout: float,
+    async def shoot(self, command: str, param: str, uuid: str, timeout: float, name: str,
                     job_type: worker.JobTypeEnum = worker.JobTypeEnum.SCHEDULE) -> None:
         """使用worker执行job."""
         self._py_logger.info('分发任务到worker uuid:%s', uuid)
-        return await self._worker.shoot(command, param, uuid, timeout, job_type)
+        return await self._worker.shoot(command, param, uuid, timeout, name, job_type)
 
     async def add_job(self, cron_exp: str, command: str, param: str,
                       uuid: typing.Optional[str] = None, name: str = '') -> typing.Optional[trigger.JobInfo]:
@@ -218,7 +218,7 @@ class CronWeb:
         self._py_logger.debug('任务开始执行 状态:%s uuid:%s', shot_state.state.name, shot_state.uuid)
         await self._storage.job_log_shoot(log_path, shot_state)
 
-    def add_job_done_hook(self, func: typing.Callable[[str, worker.JobStateEnum, worker.JobTypeEnum],
+    def add_job_done_hook(self, func: typing.Callable[[str, str, worker.JobStateEnum, worker.JobTypeEnum],
                                                       typing.Awaitable[None]]):
         self._worker.add_job_done_hook(func)
 
@@ -338,6 +338,8 @@ class CronWeb:
         self._log_check_handle = self._loop.call_at(self._timing_log_check_next(), self._timing_check)
         self._py_logger.info('日志定时一致性检查启动')
         asyncio.ensure_future(self._timing_check_func(log_expire_days))
+        # 第一次启动时 避免和载入storage任务冲突 延迟一段时间再
+        # self._loop.call_later(30, lambda: asyncio.ensure_future(self._timing_check_func(log_expire_days)))
 
     async def _timing_check_func(self, log_expire_days):
         await self.log_expire_check(log_expire_days)
@@ -359,7 +361,7 @@ class CronWeb:
                   port: typing.Optional[int] = None, **kwargs):
         self._py_logger.info('启动fastAPI')
         self._web.on_shutdown(self.stop)
-        self._timing_check(self._log_expire_days)
-        await self.log_check()
+        # 先进行任务载入 检查日志时会用到已经载入的任务
         await self.job_check()
+        self._timing_check(self._log_expire_days)
         await self._web.start_server(host, port, **kwargs)
