@@ -191,6 +191,7 @@ Webhook以POST的方式请求hook URL，其对应的POST body为json：
 
 ```json
 {
+  "name": "任务名称 str",
   "shot_id": "执行任务的编号 str",
   "state": "任务运行结果 str [DONE | ERROR | KILLED]",
   "job_type": "任务触发类型 str [SCHEDULE | RETRY | MANUAL]",
@@ -238,7 +239,9 @@ CronWeb也支持添加本地代码的hook。CronWeb启动脚本会在启动时�
 import worker
 
 
-async def hook_job_done_sample(shot_id: str, state: worker.JobStateEnum, job_type: worker.JobTypeEnum) -> None:
+async def hook_job_done_sample(shot_id: str, name: str,
+                               state: worker.JobStateEnum,
+                               job_type: worker.JobTypeEnum) -> None:
     pass
 ```
 

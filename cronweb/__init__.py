@@ -90,11 +90,11 @@ class CronWeb:
         self._aiolog: typing.Optional[logger.LoggerBase] = aiolog_instance
         return self
 
-    async def shoot(self, command: str, param: str, uuid: str, timeout: float,
+    async def shoot(self, command: str, param: str, uuid: str, timeout: float, name: str,
                     job_type: worker.JobTypeEnum = worker.JobTypeEnum.SCHEDULE) -> None:
         """使用worker执行job."""
         self._py_logger.info('分发任务到worker uuid:%s', uuid)
-        return await self._worker.shoot(command, param, uuid, timeout, job_type)
+        return await self._worker.shoot(command, param, uuid, timeout, name, job_type)
 
     async def add_job(self, cron_exp: str, command: str, param: str,
                       uuid: typing.Optional[str] = None, name: str = '') -> typing.Optional[trigger.JobInfo]:
@@ -218,7 +218,7 @@ class CronWeb:
         self._py_logger.debug('任务开始执行 状态:%s uuid:%s', shot_state.state.name, shot_state.uuid)
         await self._storage.job_log_shoot(log_path, shot_state)
 
-    def add_job_done_hook(self, func: typing.Callable[[str, worker.JobStateEnum, worker.JobTypeEnum],
+    def add_job_done_hook(self, func: typing.Callable[[str, str, worker.JobStateEnum, worker.JobTypeEnum],
                                                       typing.Awaitable[None]]):
         self._worker.add_job_done_hook(func)
 

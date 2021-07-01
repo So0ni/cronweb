@@ -43,14 +43,15 @@ class TriggerAioCron(trigger.TriggerBase):
 
         def job_func(core_inner: cronweb.CronWeb,
                      command_inner: str, param_inner: str,
+                     name_inner: str,
                      timeout: float = 1800,
                      job_type=worker.JobTypeEnum.SCHEDULE):
-            return asyncio.ensure_future(core_inner.shoot(command_inner, param_inner, uuid, timeout,
+            return asyncio.ensure_future(core_inner.shoot(command_inner, param_inner, uuid, timeout, name_inner,
                                                           job_type=job_type))
 
         cron = aiocron.Cron(spec=cron_exp,
                             func=job_func,
-                            args=(self._core, command, param),
+                            args=(self._core, command, param, name),
                             start=True if active == 1 else False,
                             uuid=uuid
                             )
