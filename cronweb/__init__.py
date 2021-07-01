@@ -338,6 +338,8 @@ class CronWeb:
         self._log_check_handle = self._loop.call_at(self._timing_log_check_next(), self._timing_check)
         self._py_logger.info('日志定时一致性检查启动')
         asyncio.ensure_future(self._timing_check_func(log_expire_days))
+        # 第一次启动时 避免和载入storage任务冲突 延迟一段时间再
+        # self._loop.call_later(30, lambda: asyncio.ensure_future(self._timing_check_func(log_expire_days)))
 
     async def _timing_check_func(self, log_expire_days):
         await self.log_expire_check(log_expire_days)
@@ -359,7 +361,7 @@ class CronWeb:
                   port: typing.Optional[int] = None, **kwargs):
         self._py_logger.info('启动fastAPI')
         self._web.on_shutdown(self.stop)
-        self._timing_check(self._log_expire_days)
-        await self.log_check()
+        # 先进行任务载入 检查日志时会用到已经载入的任务
         await self.job_check()
+        self._timing_check(self._log_expire_days)
         await self._web.start_server(host, port, **kwargs)
