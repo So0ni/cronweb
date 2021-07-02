@@ -4,6 +4,7 @@ import sys
 import json
 import typing
 import getpass
+import socket
 import pathlib
 import secrets
 import platform
@@ -45,6 +46,7 @@ class InfoConfig:
     user_current: str = getpass.getuser()
     user_option: str = getpass.getuser()
     group_option: str = getpass.getuser()
+    cert_suffix: str = socket.gethostname() or ''
     ssl_keyfile: pathlib.Path = (PATH_PROJ_ROOT / "certs" / "server.key")
     ssl_certfile: pathlib.Path = (PATH_PROJ_ROOT / "certs" / "server.pem")
     ssl_ca_certs: pathlib.Path = (PATH_PROJ_ROOT / "certs" / "client_ca.pem")
@@ -251,7 +253,7 @@ def create_certs(config: InfoConfig):
                 subprocess.check_call([
                     'openssl', 'req', '-x509', '-newkey', 'rsa:4096', '-sha256', '-days', '730',
                     '-nodes', '-keyout', f'{file_cert_key}', '-out', f'{file_cert}',
-                    '-subj', '/CN=CronWebServer', '-addext',
+                    '-subj', f'/CN=CronWebServer_{config.cert_suffix}', '-addext',
                     f'subjectAltName=IP:{config.host}'
                 ])
                 print('服务端自签名证书生成完成\n'
@@ -272,7 +274,7 @@ def create_certs(config: InfoConfig):
                 subprocess.check_call([
                     'openssl', 'req', '-x509', '-newkey', 'rsa:4096', '-sha256', '-days', '730',
                     '-nodes', '-keyout', f'{file_ca_key}', '-out', f'{file_ca}',
-                    '-subj', '/CN=CronWebClientCA'
+                    '-subj', f'/CN=CronWebClientCA_{config.cert_suffix}'
                 ])
                 print('客户端自签名CA证书生成完成\n'
                       f'客户端CA证书公钥文件路径: {file_ca} \n'
@@ -533,7 +535,7 @@ def gen_user_cert(
     print('生成客户端证书公钥')
     subprocess.check_call([
         'openssl', 'req', '-new', '-key', str(path_user_key),
-        '-out', str(path_user_csr), '-subj', f'/CN=CronWebClient_{serial}',
+        '-out', str(path_user_csr), '-subj', f'/CN=CronWebClient_{config.cert_suffix}_{serial}',
         '-addext', 'basicConstraints=CA:FALSE',
         '-addext', 'extendedKeyUsage=1.3.6.1.5.5.7.3.2',
         '-addext', 'keyUsage=digitalSignature'
