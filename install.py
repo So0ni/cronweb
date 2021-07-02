@@ -43,8 +43,8 @@ class InfoConfig:
     log_level: str = 'DEBUG'
     work_dir: str = f'{PATH_PROJ_ROOT / "scripts"}'
     user_current: str = getpass.getuser()
-    user_option: str = 'cronweb'
-    group_option: str = 'cronweb'
+    user_option: str = getpass.getuser()
+    group_option: str = getpass.getuser()
     ssl_keyfile: pathlib.Path = (PATH_PROJ_ROOT / "certs" / "server.key")
     ssl_certfile: pathlib.Path = (PATH_PROJ_ROOT / "certs" / "server.pem")
     ssl_ca_certs: pathlib.Path = (PATH_PROJ_ROOT / "certs" / "client_ca.pem")
@@ -104,7 +104,7 @@ def yes_or_no(prompt: str, default_choice: str,
 T = typing.TypeVar('T')
 
 
-def input_default(prompt: str, default: T, return_type: typing.Type[T] = str,
+def input_default(prompt: str, default: T, return_type: typing.Type[T] = None,
                   config: typing.Optional[InfoConfig] = None,
                   target: typing.Optional[str] = None) -> T:
     if config is not None:
@@ -116,6 +116,9 @@ def input_default(prompt: str, default: T, return_type: typing.Type[T] = str,
                     return getattr(config, target)
                 setattr(config, target, default)
             return default
+        return_type = return_type or type(getattr(config, target))
+    else:
+        return_type = return_type or str
     hint_default = f'[{default}]' if default else ''
     string_input = input(f'{prompt}{hint_default}: ').strip() or default
     value: T = return_type(string_input)
@@ -378,6 +381,9 @@ def after_linux(config: InfoConfig):
         except FileNotFoundError:
             print('当前系统并未安装nginx，不需要生成service文件')
             return None
+        if not yes_or_no('是否要生成nginx配置文件', 'no', config):
+            print('跳过nginx配置文件生成')
+            return None
         print('生成nginx配置文件')
         with open(config.path_nginx_conf_tmpl, 'r', encoding='utf8') as fp:
             tmpl_nginx = fp.read()
@@ -386,18 +392,23 @@ def after_linux(config: InfoConfig):
                       config=config, target='host')
         input_default('输入nginx的反代端口',
                       default=config.port,
+                      return_type=int,
                       config=config, target='port')
         input_default('输入nginx的服务端证书路径',
                       default=config.ssl_certfile,
+                      return_type=pathlib.Path,
                       config=config, target='ssl_certfile')
         input_default('输入nginx的服务端证书私钥路径',
                       default=config.ssl_keyfile,
+                      return_type=pathlib.Path,
                       config=config, target='ssl_keyfile')
         input_default('输入nginx的客户端认证CA证书路径',
                       default=config.ssl_ca_certs,
+                      return_type=pathlib.Path,
                       config=config, target='ssl_ca_certs')
         input_default('输入nginx的客户端认证CA证书路径',
                       default=config.ssl_ca_certs,
+                      return_type=pathlib.Path,
                       config=config, target='ssl_ca_certs')
         client_nginx_cert = input_default('输入CronWeb的客户端证书路径',
                                           default=config.ssl_ca_certs.parent / 'client_nginx.pem',
