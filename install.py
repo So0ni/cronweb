@@ -116,13 +116,13 @@ def input_default(prompt: str, default: T, return_type: typing.Type[T] = None,
                     return getattr(config, target)
                 setattr(config, target, default)
             return default
-        return_type = return_type or type(getattr(config, target))
+        return_type = return_type or type(default)
     else:
         return_type = return_type or str
     hint_default = f'[{default}]' if default else ''
     string_input = input(f'{prompt}{hint_default}: ').strip() or default
     value: T = return_type(string_input)
-    if config is not None:
+    if config is not None and target is not None:
         setattr(config, target, value)
     return value
 
