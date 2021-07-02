@@ -4,6 +4,7 @@ import sys
 import json
 import typing
 import getpass
+import socket
 import pathlib
 import secrets
 import platform
@@ -43,8 +44,9 @@ class InfoConfig:
     log_level: str = 'DEBUG'
     work_dir: str = f'{PATH_PROJ_ROOT / "scripts"}'
     user_current: str = getpass.getuser()
-    user_option: str = 'cronweb'
-    group_option: str = 'cronweb'
+    user_option: str = getpass.getuser()
+    group_option: str = getpass.getuser()
+    cert_suffix: str = socket.gethostname() or ''
     ssl_keyfile: pathlib.Path = (PATH_PROJ_ROOT / "certs" / "server.key")
     ssl_certfile: pathlib.Path = (PATH_PROJ_ROOT / "certs" / "server.pem")
     ssl_ca_certs: pathlib.Path = (PATH_PROJ_ROOT / "certs" / "client_ca.pem")
@@ -104,7 +106,7 @@ def yes_or_no(prompt: str, default_choice: str,
 T = typing.TypeVar('T')
 
 
-def input_default(prompt: str, default: T, return_type: typing.Type[T] = str,
+def input_default(prompt: str, default: T, return_type: typing.Type[T] = None,
                   config: typing.Optional[InfoConfig] = None,
                   target: typing.Optional[str] = None) -> T:
     if config is not None:
@@ -116,10 +118,13 @@ def input_default(prompt: str, default: T, return_type: typing.Type[T] = str,
                     return getattr(config, target)
                 setattr(config, target, default)
             return default
+        return_type = return_type or type(default)
+    else:
+        return_type = return_type or str
     hint_default = f'[{default}]' if default else ''
     string_input = input(f'{prompt}{hint_default}: ').strip() or default
     value: T = return_type(string_input)
-    if config is not None:
+    if config is not None and target is not None:
         setattr(config, target, value)
     return value
 
@@ -248,7 +253,7 @@ def create_certs(config: InfoConfig):
                 subprocess.check_call([
                     'openssl', 'req', '-x509', '-newkey', 'rsa:4096', '-sha256', '-days', '730',
                     '-nodes', '-keyout', f'{file_cert_key}', '-out', f'{file_cert}',
-                    '-subj', '/CN=CronWebServer', '-addext',
+                    '-subj', f'/CN=CronWebServer_{config.cert_suffix}', '-addext',
                     f'subjectAltName=IP:{config.host}'
                 ])
                 print('服务端自签名证书生成完成\n'
@@ -269,7 +274,7 @@ def create_certs(config: InfoConfig):
                 subprocess.check_call([
                     'openssl', 'req', '-x509', '-newkey', 'rsa:4096', '-sha256', '-days', '730',
                     '-nodes', '-keyout', f'{file_ca_key}', '-out', f'{file_ca}',
-                    '-subj', '/CN=CronWebClientCA'
+                    '-subj', f'/CN=CronWebClientCA_{config.cert_suffix}'
                 ])
                 print('客户端自签名CA证书生成完成\n'
                       f'客户端CA证书公钥文件路径: {file_ca} \n'
@@ -378,6 +383,9 @@ def after_linux(config: InfoConfig):
         except FileNotFoundError:
             print('当前系统并未安装nginx，不需要生成service文件')
             return None
+        if not yes_or_no('是否要生成nginx配置文件', 'no', config):
+            print('跳过nginx配置文件生成')
+            return None
         print('生成nginx配置文件')
         with open(config.path_nginx_conf_tmpl, 'r', encoding='utf8') as fp:
             tmpl_nginx = fp.read()
@@ -386,18 +394,23 @@ def after_linux(config: InfoConfig):
                       config=config, target='host')
         input_default('输入nginx的反代端口',
                       default=config.port,
+                      return_type=int,
                       config=config, target='port')
         input_default('输入nginx的服务端证书路径',
                       default=config.ssl_certfile,
+                      return_type=pathlib.Path,
                       config=config, target='ssl_certfile')
         input_default('输入nginx的服务端证书私钥路径',
                       default=config.ssl_keyfile,
+                      return_type=pathlib.Path,
                       config=config, target='ssl_keyfile')
         input_default('输入nginx的客户端认证CA证书路径',
                       default=config.ssl_ca_certs,
+                      return_type=pathlib.Path,
                       config=config, target='ssl_ca_certs')
         input_default('输入nginx的客户端认证CA证书路径',
                       default=config.ssl_ca_certs,
+                      return_type=pathlib.Path,
                       config=config, target='ssl_ca_certs')
         client_nginx_cert = input_default('输入CronWeb的客户端证书路径',
                                           default=config.ssl_ca_certs.parent / 'client_nginx.pem',
@@ -522,7 +535,7 @@ def gen_user_cert(
     print('生成客户端证书公钥')
     subprocess.check_call([
         'openssl', 'req', '-new', '-key', str(path_user_key),
-        '-out', str(path_user_csr), '-subj', f'/CN=CronWebClient_{serial}',
+        '-out', str(path_user_csr), '-subj', f'/CN=CronWebClient_{config.cert_suffix}_{serial}',
         '-addext', 'basicConstraints=CA:FALSE',
         '-addext', 'extendedKeyUsage=1.3.6.1.5.5.7.3.2',
         '-addext', 'keyUsage=digitalSignature'

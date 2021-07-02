@@ -337,9 +337,13 @@ class CronWeb:
             self._log_check_handle.cancel()
         self._log_check_handle = self._loop.call_at(self._timing_log_check_next(), self._timing_check)
         self._py_logger.info('日志定时一致性检查启动')
-        asyncio.ensure_future(self._timing_check_func(log_expire_days))
-        # 第一次启动时 避免和载入storage任务冲突 延迟一段时间再
-        # self._loop.call_later(30, lambda: asyncio.ensure_future(self._timing_check_func(log_expire_days)))
+
+        def callback(ta: asyncio.Task):
+            err = ta.exception()
+            if err:
+                self._py_logger.exception(err)
+
+        asyncio.create_task(self._timing_check_func(log_expire_days)).add_done_callback(callback)
 
     async def _timing_check_func(self, log_expire_days):
         await self.log_expire_check(log_expire_days)
