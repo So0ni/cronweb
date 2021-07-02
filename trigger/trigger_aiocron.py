@@ -2,6 +2,8 @@ import trigger
 import aiocron
 import typing
 import datetime
+import pytz
+import pytz.tzinfo
 import asyncio
 from uuid import uuid4
 import croniter
@@ -21,9 +23,11 @@ class CronJob(typing.NamedTuple):
 
 
 class TriggerAioCron(trigger.TriggerBase):
-    def __init__(self, controller: typing.Optional[cronweb.CronWeb] = None):
+    def __init__(self, controller: typing.Optional[cronweb.CronWeb] = None,
+                 tz: typing.Optional[str] = None):
         super().__init__(controller)
         self._job_dict: typing.Dict[str, CronJob] = {}
+        self.tz = pytz.timezone(tz) if tz else None
 
     def add_job(self, cron_exp: str, command: str, param: str,
                 date_create: str, date_update: typing.Optional[str] = None,
@@ -53,7 +57,8 @@ class TriggerAioCron(trigger.TriggerBase):
                             func=job_func,
                             args=(self._core, command, param, name),
                             start=True if active == 1 else False,
-                            uuid=uuid
+                            uuid=uuid,
+                            tz=self.tz
                             )
         self._job_dict[uuid] = CronJob(cron, command, param, name, date_create, date_update or date_create, active)
         return self._cronjob_to_jobinfo(self._job_dict[uuid])
