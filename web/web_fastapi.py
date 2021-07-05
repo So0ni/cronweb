@@ -50,21 +50,28 @@ class WebFastAPI(web.WebBase):
                 content={'code': exc.code, 'response': exc.response},
             )
 
-        def check_auth(credentials: fastapi.security.HTTPAuthorizationCredentials = fastapi.Security(security)):
+        def check_auth(credentials: fastapi.security.HTTPAuthorizationCredentials = fastapi.Security(security),
+                       secret: typing.Optional[str] = None):
             if self.secret is None:
-                return
+                return None
 
-            if credentials and credentials.scheme.lower() != "bearer":
+            if secret == self.secret:
+                # 非常不建议使用这种方式
+                return None
+
+            if not (credentials and credentials.scheme and credentials.credentials):
+                raise AuthException(code=-1, response='未授权，请登录')
+
+            if credentials.scheme.lower() != "bearer":
                 raise fastapi.HTTPException(
                     status_code=fastapi.status.HTTP_403_FORBIDDEN,
                     detail="无效认证信息",
                 )
-            if not (credentials and credentials.scheme and credentials.credentials):
-                raise AuthException(code=-1, response='未授权，请登录')
 
-            if credentials.credentials != self.secret:
-                raise AuthException(code=-2, response='认证信息错误')
-            return
+            if credentials.credentials == self.secret:
+                return None
+
+            raise AuthException(code=-2, response='认证信息错误')
 
         @self.app.get('/api/sys/connection')
         async def connection_check():
