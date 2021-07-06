@@ -67,5 +67,9 @@ class WorkerBase(abc.ABC):
         pass
 
     @abc.abstractmethod
+    def stop(self):
+        pass
+
+    @abc.abstractmethod
     def __contains__(self, shot_id: str) -> bool:
         pass
