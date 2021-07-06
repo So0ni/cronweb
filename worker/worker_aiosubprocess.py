@@ -1,3 +1,5 @@
+import concurrent.futures
+import logging
 import os
 import json
 import pathlib
@@ -12,7 +14,63 @@ import hmac
 import base64
 import aiohttp
 import asyncio.subprocess
+import threading
 from uuid import uuid4
+
+
+class EventLoopThreadStopError(Exception):
+    pass
+
+
+class HookEventLoopThread(threading.Thread):
+    def __init__(self, *args,
+                 loop_main: typing.Optional[asyncio.AbstractEventLoop] = None,
+                 loop_child: typing.Optional[asyncio.AbstractEventLoop] = None,
+                 **kwargs):
+        super().__init__(*args, **kwargs)
+        self.loop_main = loop_main or asyncio.get_event_loop()
+        self.loop_child = loop_child or asyncio.new_event_loop()
+        self.running = False
+        self.running_futures: typing.Set[asyncio.Future] = set()
+        self._py_logger = logging.getLogger('cronweb.worker.HookEventLoopThread')
+
+    def run(self):
+        self.running = True
+        self.loop_child.run_forever()
+
+    def _callback_done(self, future: asyncio.Future):
+        self.running_futures.remove(future)
+        try:
+            future.exception()
+        except (asyncio.CancelledError, concurrent.futures.CancelledError):
+            pass
+        self._py_logger.debug('hook执行结束')
+
+    async def _timeout_wrap(self, coroutine: typing.Awaitable, timeout: float):
+        try:
+            await asyncio.wait_for(coroutine, timeout)
+        except asyncio.TimeoutError as e:
+            self._py_logger.warning('hook执行超时')
+            self._py_logger.exception(e)
+
+    def run_coroutine(self, coroutine, timeout: float) -> asyncio.Future:
+        if not self.running:
+            raise EventLoopThreadStopError('hook事件循环线程已停止')
+        future_concurrent = asyncio.run_coroutine_threadsafe(
+            self._timeout_wrap(coroutine, timeout=timeout),
+            loop=self.loop_child
+        )
+        future_asyncio = asyncio.wrap_future(future_concurrent, loop=self.loop_main)
+        future_asyncio.add_done_callback(self._callback_done)
+        self.running_futures.add(future_asyncio)
+        return future_asyncio
+
+    def stop(self):
+        self._py_logger.debug('hook事件循环停止运行')
+        self.running = False
+        [fu.cancel() for fu in self.running_futures]
+        self.loop_child.call_soon_threadsafe(self.loop_child.stop)
+        self.join()
 
 
 class AioSubprocessWorker(worker.WorkerBase):
@@ -31,6 +89,8 @@ class AioSubprocessWorker(worker.WorkerBase):
         self.webhook_url = webhook_url
         self.webhook_secret = webhook_secret if isinstance(webhook_secret, bytes) else webhook_secret.encode('utf8')
         self.webhook_timeout = aiohttp.ClientTimeout(total=30)
+        self._hook_thread = HookEventLoopThread()
+        self._hook_thread.start()
 
         self._killed_shot_id: typing.Set[str] = set()
         self._waiting_for_retry: typing.Set[str] = set()
@@ -121,7 +181,8 @@ class AioSubprocessWorker(worker.WorkerBase):
                     job_type: worker.JobTypeEnum) -> None:
         is_retry = False
         shot_id_root: typing.Optional[str] = None
-        hook_tasks: typing.List[asyncio.Task] = []
+        hook_futures: typing.List[asyncio.Future] = []
+        hook_timeout = 30
         for count_shoot in range(self.times_retry + 1):
             if is_retry:
                 wait_seconds = ((2 ** count_shoot) - 1) * self.wait_retry_base
@@ -133,10 +194,17 @@ class AioSubprocessWorker(worker.WorkerBase):
 
             # 优先webhook
             if self.webhook_url:
-                hook_tasks.append(asyncio.create_task(self._webhook_job_done(name, shot_id, state, job_type)))
+                hook_futures.append(
+                    self._hook_thread.run_coroutine(
+                        self._webhook_job_done(name, shot_id, state, job_type),
+                        timeout=hook_timeout
+                    )
+                )
             # 其后本地hook 为避免影响重试机制使用task交给loop执行
             for func in self._job_done_hooks:
-                hook_tasks.append(asyncio.create_task(func(name, shot_id, state, job_type)))
+                hook_futures.append(
+                    self._hook_thread.run_coroutine(func(name, shot_id, state, job_type), timeout=hook_timeout)
+                )
 
             if state.name != 'ERROR':
                 break
@@ -149,18 +217,6 @@ class AioSubprocessWorker(worker.WorkerBase):
         if shot_id_root and shot_id_root in self._waiting_for_retry:
             self._py_logger.warning('移除等待重试集合 shot_id: %s', shot_id_root)
             self._waiting_for_retry.remove(shot_id_root)
-        if hook_tasks:
-            gather = asyncio.gather(*hook_tasks, return_exceptions=True)
-            try:
-                # 限制hooks超时时间 超时后hook会被取消 hook函数需要捕获
-                await asyncio.wait_for(gather, timeout=60)
-            except asyncio.TimeoutError:
-                self._py_logger.error('有hook执行超时')
-            try:
-                # 解决_GatheringFuture exception was never retrieved
-                await gather
-            except asyncio.CancelledError:
-                self._py_logger.warning('未完成的hook已被取消')
 
         return None
 
@@ -238,6 +294,9 @@ class AioSubprocessWorker(worker.WorkerBase):
             self._py_logger.warning('子进程正常中止超时 尝试强制停止')
             job[1].kill()
         return shot_id
+
+    def stop(self):
+        self._hook_thread.stop()
 
     def __contains__(self, shot_id: str) -> bool:
         return shot_id in self._running_jobs

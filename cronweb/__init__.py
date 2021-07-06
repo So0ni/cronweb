@@ -360,6 +360,7 @@ class CronWeb:
         await self.stop_all_running_jobs()
         await self.job_check()
         await self._storage.stop()
+        self._worker.stop()
 
     async def run(self, host: typing.Optional[str] = None,
                   port: typing.Optional[int] = None, **kwargs):
