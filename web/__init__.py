@@ -22,6 +22,14 @@ class WebBase(abc.ABC):
             self._core.set_web_default(self)
 
     @abc.abstractmethod
+    def get_token(self) -> str:
+        pass
+
+    @abc.abstractmethod
+    def check_token(self, token: str) -> bool:
+        pass
+
+    @abc.abstractmethod
     def on_shutdown(self, func: typing.Callable):
         pass
 
