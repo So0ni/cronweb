@@ -90,6 +90,9 @@ class CronWeb:
         self._aiolog: typing.Optional[logger.LoggerBase] = aiolog_instance
         return self
 
+    def get_api_token(self) -> str:
+        return self._web.get_token()
+
     async def shoot(self, command: str, param: str, uuid: str, timeout: float, name: str,
                     job_type: worker.JobTypeEnum = worker.JobTypeEnum.SCHEDULE) -> None:
         """使用worker执行job."""

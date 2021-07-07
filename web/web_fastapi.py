@@ -7,6 +7,11 @@ import fastapi.middleware.cors
 import pydantic
 import cronweb
 import typing
+import datetime
+import json
+import base64
+import secrets
+import hmac
 
 
 class WebFastAPI(web.WebBase):
@@ -15,7 +20,9 @@ class WebFastAPI(web.WebBase):
                  host: typing.Optional[str] = None,
                  port: typing.Optional[int] = None,
                  uv_kwargs: typing.Optional[typing.Dict[str, typing.Any]] = None,
-                 fa_kwargs: typing.Optional[typing.Dict[str, typing.Any]] = None):
+                 fa_kwargs: typing.Optional[typing.Dict[str, typing.Any]] = None,
+                 token_algo: str = 'sha256',
+                 token_lifetime: int = 604800):
         super().__init__(controller)
         fa_kwargs = fa_kwargs if fa_kwargs else {}
         self.uv_kwargs = uv_kwargs if uv_kwargs else {}
@@ -24,6 +31,10 @@ class WebFastAPI(web.WebBase):
         self.port = port
         self.app = fastapi.FastAPI(**fa_kwargs)
         self.init_api()
+
+        self.token_algo = token_algo
+        # 604800s=7d
+        self.token_lifetime = token_lifetime
 
         self.app.add_middleware(
             fastapi.middleware.cors.CORSMiddleware,
@@ -51,12 +62,12 @@ class WebFastAPI(web.WebBase):
             )
 
         def check_auth(credentials: fastapi.security.HTTPAuthorizationCredentials = fastapi.Security(security),
-                       secret: typing.Optional[str] = None):
+                       token: typing.Optional[str] = None):
             if self.secret is None:
                 return None
 
-            if secret == self.secret:
-                # 非常不建议使用这种方式
+            if token and self.check_token(token):
+                # 以token的方式验证(一般用于查看日志)
                 return None
 
             if not (credentials and credentials.scheme and credentials.credentials):
@@ -85,6 +96,20 @@ class WebFastAPI(web.WebBase):
                 return {'code': -1, 'response': '错误的认证信息'}
 
             return {'code': 0, 'response': 'hello'}
+
+        @self.app.get('/api/sys/token')
+        async def get_token(secret: str):
+            if self.secret is None and len(secret) != 0:
+                return {'code': -1, 'response': '错误的认证信息'}
+            if self.secret is not None and self.secret != secret:
+                return {'code': -1, 'response': '错误的认证信息'}
+
+            return {
+                'code': 0, 'response': {
+                    'token': self.get_token(),
+                    'lifetime': self.token_lifetime
+                }
+            }
 
         @self.app.get('/api/sys/code')
         async def code_explanation():
@@ -239,6 +264,49 @@ class WebFastAPI(web.WebBase):
             return log_record
 
         self.app.mount("/", fastapi.staticfiles.StaticFiles(directory="static", html=True), name="site")
+
+    @staticmethod
+    def generate_token(algo: str, lifetime: int, secret: str) -> str:
+        header = json.dumps({'algo': algo}).encode('utf8')
+        payload = json.dumps({
+            # timestamp in seconds
+            'ts': int(datetime.datetime.now().timestamp()),
+            # lifetime in seconds (604800s=7d)
+            'lt': lifetime
+        }).encode('utf8')
+        token = f'{base64.urlsafe_b64encode(header).decode()}.{base64.urlsafe_b64encode(payload).decode()}'
+        sign = base64.urlsafe_b64encode(
+            hmac.new(secret.encode('utf8'), token.encode('utf8'), algo).digest()
+        ).decode()
+        return f'{token}.{sign}'
+
+    def get_token(self) -> str:
+        if self.secret is None:
+            return ''
+        return self.generate_token(self.token_algo, self.token_lifetime, self.secret)
+
+    def check_token(self, token: str) -> bool:
+        if self.secret is None:
+            return True
+        split = token.split('.')
+        if len(split) != 3:
+            return False
+        sign_orig = base64.urlsafe_b64decode(split[2])
+        token = '.'.join(split[:2])
+        # check sign
+        sign = hmac.new(self.secret.encode('utf8'), token.encode('utf8'), self.token_algo).digest()
+        if not secrets.compare_digest(sign, sign_orig):
+            return False
+        # check lifetime
+        header, payload = token.split('.')
+        header = json.loads(base64.urlsafe_b64decode(header).decode('utf8'))
+        payload = json.loads(base64.urlsafe_b64decode(payload).decode('utf8'))
+        lifetime: int = payload['lt']
+        timestamp: int = payload['ts']
+        now = datetime.datetime.now().timestamp()
+        if now - timestamp > lifetime:
+            return False
+        return True
 
     def on_shutdown(self, func: typing.Callable):
         self._py_logger.info('添加fastAPI shutdown回调')

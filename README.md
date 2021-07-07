@@ -247,9 +247,9 @@ async def hook_job_done_sample(shot_id: str, name: str,
 
 ### 注意
 
-1. 不要在hook函数中直接使用阻塞型io，这会阻塞事件循环，导致整体运行延迟。使用`asyncio.run_in_executor`
+1. 不要在hook函数中直接使用阻塞型io，虽然这不会导致定时任务整体延迟，但是却会导致其它hook延迟。使用`asyncio.run_in_executor`
 
-2. 不要在hook函数中直接进行CPU密集型操作。同样使用`asyncio.run_in_executor`
+2. 不要在hook函数中直接进行CPU密集型操作，由于GIL的存在，执行CPU密集型操作甚至会等导致主事件循环出现异常。同样使用`asyncio.run_in_executor`
 
 3. hook函数有60s超时限制，超时会被取消执行，需要在hooks函数中捕捉`asyncio.CancelledError`
 
