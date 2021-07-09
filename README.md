@@ -29,11 +29,9 @@ CronWeb是一个不依赖crontab的cron服务，并有一个与之对应的WebUI
 
 2. 千万不要执行非可信代码和程序(这点和crontab一样)
 
-3. 如果要将WebAPI暴露到非本机地址，最好使用客户端证书认证， 不要依赖自带密码(CronWeb自带的客户端证书认证和反向代理服务器的客户端证书认证并不冲突， 并且建议同时开启)
+3. 如果要将WebAPI暴露到非本机地址，最好使用客户端证书认证，不要依赖自带密码(CronWeb自带的客户端证书认证和反向代理服务器的客户端证书认证并不冲突， 并且建议同时开启)
 
-4. ~即使只监听本地回环，本机其它账户仍然可以通过回环地址访问到WebAPI，~
-   ~所以请不要在可能有非可信人员访问到哪怕另外账户的服务器或计算机上部署~
-   尽可能开启客户端证书认证，以解决监听本地回环时来自本地的WebAPI非法访问
+4. 尽可能开启客户端证书认证，以解决监听本地回环时来自本地的WebAPI非法访问
 
 5. 确保被执行的代码不会被非法修改，CronWeb的配置文件和证书目录不会被其它账户访问
 
@@ -254,6 +252,12 @@ async def hook_job_done_sample(shot_id: str, name: str,
 3. hook函数有60s超时限制，超时会被取消执行，需要在hooks函数中捕捉`asyncio.CancelledError`
 
 4. 使用全局变量和并发时注意内存泄露问题
+
+## 通过url-query验证登陆状态
+
+在访问API时，除了在Header中添加对应的字段通过登陆之外，也可以通过url-query中添加token参数来实现登陆状态。
+
+token的生成算法在`web.web_fastapi.WebFastAPI.generate_token`方法中。
 
 ## Screenshots
 
