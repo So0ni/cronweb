@@ -12,6 +12,7 @@ import json
 import base64
 import secrets
 import hmac
+import re
 
 
 class WebFastAPI(web.WebBase):
@@ -62,11 +63,12 @@ class WebFastAPI(web.WebBase):
             )
 
         def check_auth(credentials: fastapi.security.HTTPAuthorizationCredentials = fastapi.Security(security),
-                       token: typing.Optional[str] = None):
+                       token: typing.Optional[str] = None,
+                       request: fastapi.Request = None):
             if self.secret is None:
                 return None
 
-            if token and self.check_token(token):
+            if token and self.check_token(token, url_path=request.url.path):
                 # 以token的方式验证(一般用于查看日志)
                 return None
 
@@ -98,7 +100,7 @@ class WebFastAPI(web.WebBase):
             return {'code': 0, 'response': 'hello'}
 
         @self.app.get('/api/sys/token')
-        async def get_token(secret: str):
+        async def get_token(secret: str, url_path: typing.Optional[str] = None):
             if self.secret is None and len(secret) != 0:
                 return {'code': -1, 'response': '错误的认证信息'}
             if self.secret is not None and self.secret != secret:
@@ -106,7 +108,7 @@ class WebFastAPI(web.WebBase):
 
             return {
                 'code': 0, 'response': {
-                    'token': self.get_token(),
+                    'token': self.get_token(url_path),
                     'lifetime': self.token_lifetime
                 }
             }
@@ -266,26 +268,29 @@ class WebFastAPI(web.WebBase):
         self.app.mount("/", fastapi.staticfiles.StaticFiles(directory="static", html=True), name="site")
 
     @staticmethod
-    def generate_token(algo: str, lifetime: int, secret: str) -> str:
+    def generate_token(algo: str, lifetime: int, secret: str, url_path: typing.Optional[str] = None) -> str:
         header = json.dumps({'algo': algo}).encode('utf8')
-        payload = json.dumps({
+        payload_dict = {
             # timestamp in seconds
             'ts': int(datetime.datetime.now().timestamp()),
             # lifetime in seconds (604800s=7d)
             'lt': lifetime
-        }).encode('utf8')
+        }
+        if url_path is not None:
+            payload_dict['path'] = url_path
+        payload = json.dumps(payload_dict).encode('utf8')
         token = f'{base64.urlsafe_b64encode(header).decode()}.{base64.urlsafe_b64encode(payload).decode()}'
         sign = base64.urlsafe_b64encode(
             hmac.new(secret.encode('utf8'), token.encode('utf8'), algo).digest()
         ).decode()
         return f'{token}.{sign}'
 
-    def get_token(self) -> str:
+    def get_token(self, url_path: typing.Optional[str] = None) -> str:
         if self.secret is None:
             return ''
-        return self.generate_token(self.token_algo, self.token_lifetime, self.secret)
+        return self.generate_token(self.token_algo, self.token_lifetime, self.secret, url_path)
 
-    def check_token(self, token: str) -> bool:
+    def check_token(self, token: str, url_path: str = '') -> bool:
         if self.secret is None:
             return True
         split = token.split('.')
@@ -306,6 +311,16 @@ class WebFastAPI(web.WebBase):
         now = datetime.datetime.now().timestamp()
         if now - timestamp > lifetime:
             return False
+
+        if 'path' in payload:
+            try:
+                if re.match(payload['path'], url_path):
+                    return True
+                else:
+                    return False
+            except re.error:
+                return False
+
         return True
 
     def on_shutdown(self, func: typing.Callable):
