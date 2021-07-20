@@ -37,9 +37,9 @@ class WorkerBase(abc.ABC):
         self._py_logger: logging.Logger = logging.getLogger(f'cronweb.{self.__class__.__name__}')
         self.controller_default()
         self._job_done_hooks: typing.List[
-            typing.Callable[[str, str, JobStateEnum, JobTypeEnum], typing.Awaitable[None]]] = []
+            typing.Callable[[str, str, JobStateEnum, JobTypeEnum], typing.Coroutine[None]]] = []
 
-    def add_job_done_hook(self, func: typing.Callable[[str, str, JobStateEnum, JobTypeEnum], typing.Awaitable[None]]):
+    def add_job_done_hook(self, func: typing.Callable[[str, str, JobStateEnum, JobTypeEnum], typing.Coroutine[None]]):
         if func not in self._job_done_hooks:
             self._job_done_hooks.append(func)
 

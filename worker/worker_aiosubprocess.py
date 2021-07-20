@@ -46,14 +46,14 @@ class HookEventLoopThread(threading.Thread):
             pass
         self._py_logger.debug('hook执行结束')
 
-    async def _timeout_wrap(self, coroutine: typing.Awaitable, timeout: float):
+    async def _timeout_wrap(self, coroutine: typing.Coroutine, timeout: float):
         try:
             await asyncio.wait_for(coroutine, timeout)
         except asyncio.TimeoutError as e:
             self._py_logger.warning('hook执行超时')
             self._py_logger.exception(e)
 
-    def run_coroutine(self, coroutine, timeout: float) -> asyncio.Future:
+    def run_coroutine(self, coroutine: typing.Coroutine, timeout: float) -> asyncio.Future:
         if not self.running:
             raise EventLoopThreadStopError('hook事件循环线程已停止')
         future_concurrent = asyncio.run_coroutine_threadsafe(
@@ -76,7 +76,7 @@ class HookEventLoopThread(threading.Thread):
 class AioSubprocessWorker(worker.WorkerBase):
     def __init__(self, controller: typing.Optional[cronweb.CronWeb] = None,
                  work_dir: typing.Optional[typing.Union[str, pathlib.Path]] = None,
-                 times_retry: int = 2, wait_retry_base=30,
+                 times_retry: int = 2, wait_retry_base: float = 30,
                  webhook_url: str = '',
                  webhook_secret: str = ''):
         super().__init__(controller)
