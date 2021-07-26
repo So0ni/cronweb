@@ -1,4 +1,5 @@
 import datetime
+import functools
 
 import storage
 import trigger
@@ -338,7 +339,10 @@ class CronWeb:
     def _timing_check(self, log_expire_days: int):
         if self._log_check_handle is not None:
             self._log_check_handle.cancel()
-        self._log_check_handle = self._loop.call_at(self._timing_log_check_next(), self._timing_check)
+        self._log_check_handle = self._loop.call_at(
+            self._timing_log_check_next(),
+            functools.partial(self._timing_check, log_expire_days)
+        )
         self._py_logger.info('日志定时一致性检查启动')
 
         def callback(ta: asyncio.Task):
