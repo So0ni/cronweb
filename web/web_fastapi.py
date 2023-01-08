@@ -146,8 +146,14 @@ class WebFastAPI(web.WebBase):
                 return {'response': 'uuid不存在', 'code': 2}
             return {'response': '删除成功', 'code': 0}
 
-        @self.app.post('/api/job/{uuid}/trigger', dependencies=[fastapi.Depends(check_auth)])
         @self.app.post('/api/trigger_job/{uuid}')
+        async def trigger_job(uuid: str):
+            job = self._core.trigger_job(uuid)
+            if not job:
+                return {'response': 'uuid不存在', 'code': 2}
+            return {'response': '触发成功', 'code': 0}
+
+        @self.app.post('/api/job/{uuid}/trigger', dependencies=[fastapi.Depends(check_auth)])
         async def trigger_job(uuid: str):
             job = self._core.trigger_job(uuid)
             if not job:

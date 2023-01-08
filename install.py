@@ -527,10 +527,13 @@ def gen_user_cert(
     if not path_user_cert.parent.exists():
         path_user_cert.parent.mkdir(parents=True)
 
-    print('生成客户端证书私钥')
-    subprocess.check_call([
-        'openssl', 'genrsa', '-out', str(path_user_key), '2048'
-    ])
+    if not path_user_key.is_file():
+        print('生成客户端证书私钥')
+        subprocess.check_call([
+            'openssl', 'genrsa', '-out', str(path_user_key), '2048'
+        ])
+    else:
+        print('使用已存在的客户端私钥', path_user_key)
 
     print('生成客户端证书公钥')
     subprocess.check_call([
@@ -541,7 +544,7 @@ def gen_user_cert(
         '-addext', 'keyUsage=digitalSignature'
     ])
     subprocess.check_call([
-        'openssl', 'x509', '-req', '-days', '365',
+        'openssl', 'x509', '-req', '-days', '730',
         '-in', str(path_user_csr), '-out', str(path_user_cert),
         '-CAkey', str(path_key), '-CA', str(path_cert), '-set_serial', serial
     ])
